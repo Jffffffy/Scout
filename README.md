@@ -79,11 +79,22 @@ No key? It still runs in **mock AI mode**, so you can click through every featur
 
 Phone uploads: see [`shortcut/SHORTCUT.md`](shortcut/SHORTCUT.md).
 
+## Deploy (public HTTPS link)
+
+**Render (stable link, laptop can be off):** New + ⟹ Blueprint ⟹ pick this repo ⟹ it reads `render.yaml` ⟹ paste `OPENROUTER_KEY` when asked ⟹ Deploy. You get `https://scout-xxxx.onrender.com`.
+Free instances sleep after ~15 min idle (first visit then takes ~50 s) and memory resets on restart.
+
+**Quick tunnel (2 minutes, laptop must stay on):**
+```bash
+cloudflared tunnel --url http://localhost:8000
+```
+
 ## API
 
 | Method | Path | What it does |
 |---|---|---|
-| POST | `/api/users` | Create account (+5 credits) |
+| POST | `/api/signup` | JSON `username`, `password` ⟹ account (+5 credits) |
+| POST | `/api/login` | JSON `username`, `password` ⟹ account |
 | GET | `/api/places` | Map data: color, freshness, bounty (free) |
 | GET | `/api/places/{id}?user_id=` | Full AI-extracted state (−1) |
 | POST | `/api/upload` | Form: `photo`, `user_id`, `lat`, `lng`, optional `place_id` |
@@ -113,7 +124,7 @@ FastAPI · OpenCV · OpenRouter (Gemini 2.5 Flash by default, configurable) · L
 
 - Data lives in memory and resets on restart. Next: a database.
 - Six seed places with approximate coordinates. Next: every building and room.
-- No login. Next: CMU SSO so credits cannot be farmed with many accounts.
+- Username + password accounts (salted PBKDF2 hashes). Next: CMU SSO so credits cannot be farmed with many accounts.
 - Next: predictions ("Hunt is usually free after 8 pm") from the history of reports.
 
 ## Disclosure

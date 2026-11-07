@@ -77,18 +77,30 @@ def _payment_required(user, cost):
 # ---------------------------------------------------------------------------
 # users
 # ---------------------------------------------------------------------------
-class NewUser(BaseModel):
-    name: str = "Scout"
+class Credentials(BaseModel):
+    username: str
+    password: str
 
 
-@app.post("/api/users")
-def create_user(body: NewUser):
-    return store.create_user(body.name)
+@app.post("/api/signup")
+def signup(body: Credentials):
+    try:
+        return store.public(store.signup(body.username, body.password))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/api/login")
+def login(body: Credentials):
+    user = store.login(body.username, body.password)
+    if not user:
+        raise HTTPException(401, "Wrong username or password.")
+    return store.public(user)
 
 
 @app.get("/api/users/{user_id}")
 def get_user(user_id: str):
-    return _user_or_404(user_id)
+    return store.public(_user_or_404(user_id))
 
 
 @app.get("/api/leaderboard")
@@ -135,7 +147,7 @@ async def upload(
     lng: Optional[float] = Form(None),
     place_id: Optional[str] = Form(None),
 ):
-    user = store.get_or_create_user(user_id.strip())
+    user = _user_or_404(user_id.strip())
     raw = await photo.read()
     if len(raw) > MAX_UPLOAD_BYTES:
         raise HTTPException(413, "Photo too large (max 12 MB).")
@@ -181,7 +193,8 @@ async def upload(
     del clean  # blurred photo is gone too. We keep only the JSON below.
 
     if not analysis.get("valid"):
-        return _reject(user, f"Photo not accepted: {analysis.get('reject_reason') or 'not a clear photo of this place'}.")
+        return _reject(user, f"Photo not accepted: {analysis.get('reject_reason') or 'not a clear photo of this place'}.",
+                       analysis=analysis)
 
     # 5. update the place and pay the bounty
     store.set_state(place["id"], analysis)
@@ -204,14 +217,15 @@ async def upload(
         "faces_blurred": faces,
         "photo_stored": False,
         "summary": analysis.get("summary"),
+        "analysis": analysis,  # the full JSON the AI extracted (shown in the UI for testing)
         "mock": analysis.get("mock", False),
     }
 
 
-def _reject(user, reason):
+def _reject(user, reason, analysis=None):
     return JSONResponse(status_code=200, content={
         "accepted": False, "message": reason, "credits_earned": 0,
-        "credits": user["credits"], "photo_stored": False,
+        "credits": user["credits"], "photo_stored": False, "analysis": analysis,
     })
 
 

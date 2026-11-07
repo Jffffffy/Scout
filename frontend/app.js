@@ -60,18 +60,52 @@ function freshnessText(p) {
 }
 
 // ---------- account ----------
-async function ensureUser() {
-  const id = store.get("scout_user");
-  if (id) {
-    try { user = await api(`/api/users/${id}`); setBalance(user.credits); return; } catch {}
-  }
-  const name = (prompt("Pick a Scout name (shown on the leaderboard):", "") || "Scout").trim();
-  user = await api("/api/users", {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }),
+let authMode = "signup";
+
+function setAuthMode(mode) {
+  authMode = mode;
+  const on = "rounded-lg py-2 bg-white shadow", off = "rounded-lg py-2 text-stone-500";
+  $("auth-tab-signup").className = mode === "signup" ? on : off;
+  $("auth-tab-login").className = mode === "login" ? on : off;
+  $("auth-submit").textContent = mode === "signup" ? "Create account · get 🪙5" : "Log in";
+  $("auth-pass").autocomplete = mode === "signup" ? "new-password" : "current-password";
+  $("auth-error").classList.add("hidden");
+}
+
+// Resolves once the user is signed in.
+function ensureUser() {
+  return new Promise(async (resolve) => {
+    const id = store.get("scout_user");
+    if (id) {
+      try { user = await api(`/api/users/${id}`); setBalance(user.credits); return resolve(); } catch {}
+    }
+    $("auth").classList.remove("hidden");
+    $("auth-tab-signup").onclick = () => setAuthMode("signup");
+    $("auth-tab-login").onclick = () => setAuthMode("login");
+    $("auth-form").onsubmit = async (ev) => {
+      ev.preventDefault();
+      const body = JSON.stringify({ username: $("auth-user").value, password: $("auth-pass").value });
+      try {
+        user = await api(authMode === "signup" ? "/api/signup" : "/api/login", {
+          method: "POST", headers: { "Content-Type": "application/json" }, body,
+        });
+      } catch (e) {
+        $("auth-error").textContent = e.message;
+        $("auth-error").classList.remove("hidden");
+        return;
+      }
+      store.set("scout_user", user.id);
+      setBalance(user.credits);
+      $("auth").classList.add("hidden");
+      toast(authMode === "signup" ? `Welcome ${user.name}! You got 🪙 ${user.credits} starter credits.` : `Welcome back ${user.name}!`, "good");
+      resolve();
+    };
   });
-  store.set("scout_user", user.id);
-  setBalance(user.credits);
-  toast(`Welcome ${user.name}! You got 🪙 ${user.credits} starter credits.`, "good");
+}
+
+function logout() {
+  try { localStorage.removeItem("scout_user"); } catch {}
+  location.reload();
 }
 
 function openAccount() {
@@ -80,14 +114,16 @@ function openAccount() {
     <div class="flex justify-between"><span class="text-stone-500">Credits</span><b>🪙 ${user.credits}</b></div>
     <div class="flex justify-between"><span class="text-stone-500">Photos shared</span><b>${user.uploads}</b></div>
     <div>
-      <div class="text-stone-500">Your user ID (paste into the iPhone Shortcut)</div>
+      <div class="text-stone-500">Your private Shortcut key (keep it secret, paste it into the iPhone Shortcut as <code>user_id</code>)</div>
       <div class="mt-1 flex gap-2">
-        <code class="flex-1 rounded-lg bg-stone-100 px-3 py-2 font-mono">${esc(user.id)}</code>
+        <code class="flex-1 rounded-lg bg-stone-100 px-3 py-2 font-mono break-all">${esc(user.id)}</code>
         <button id="copy-id" class="rounded-lg bg-stone-200 px-3 text-sm">Copy</button>
       </div>
-    </div>`;
+    </div>
+    <button id="logout" class="w-full rounded-xl border border-stone-300 py-2 text-stone-700">Log out</button>`;
   $("modal").classList.remove("hidden");
   $("copy-id").onclick = () => navigator.clipboard?.writeText(user.id).then(() => toast("Copied"));
+  $("logout").onclick = logout;
 }
 
 // ---------- tabs ----------
@@ -277,6 +313,9 @@ async function upload() {
       ${d.summary ? `<div class="text-sm mt-1">AI saw: ${esc(d.summary)}</div>` : ""}
       ${d.faces_blurred ? `<div class="text-xs mt-1">${d.faces_blurred} face(s) blurred before analysis.</div>` : ""}
       ${d.mock ? `<div class="text-xs mt-1 opacity-70">Mock AI mode (no OPENROUTER_KEY).</div>` : ""}
+      ${d.accepted && d.analysis ? `<div class="mt-2 bg-white/70 rounded-lg p-2">${stateHtml(d.analysis)}</div>` : ""}
+      ${d.analysis ? `<details class="mt-2 text-xs"><summary class="cursor-pointer opacity-70">Raw AI output (for testing)</summary>
+        <pre class="mt-1 whitespace-pre-wrap break-all bg-white/70 rounded p-2">${esc(JSON.stringify(d.analysis, null, 2))}</pre></details>` : ""}
     </div>`;
     if (d.accepted) toast(d.message, "good");
     $("snap-file").value = ""; $("snap-preview").classList.add("hidden"); $("snap-filename").textContent = "";

@@ -2,9 +2,11 @@
 
 The Shortcut takes a photo, adds your location, uploads it to Scout and shows how many credits you earned.
 
-## 0. Make the server reachable from your phone
+## 0. Get the public link
 
-Your phone cannot reach `localhost` on a laptop. Expose the server with a tunnel:
+If the app is deployed on Render, `SCOUT_URL` is your `https://....onrender.com` link. Skip to step 1.
+
+Otherwise your phone cannot reach `localhost` on a laptop. Expose the server with a tunnel:
 
 ```bash
 # option A: cloudflared (no account needed)
@@ -17,7 +19,7 @@ Copy the `https://....` URL it prints. Below we call it `SCOUT_URL`.
 
 ## 1. Get your user ID
 
-Open `SCOUT_URL` on the phone, tap the 🪙 balance in the top right, and copy your **user ID**.
+Open `SCOUT_URL` on the phone, sign up or log in, tap the 🪙 balance in the top right, and copy your **private Shortcut key**. Use it as `user_id` below. Keep it secret: anyone with it can spend your credits.
 
 ## 2. Build the Shortcut (Shortcuts app ⟹ +)
 
@@ -27,7 +29,7 @@ Open `SCOUT_URL` on the phone, tap the 🪙 balance in the top right, and copy y
 | 2 | **Get Current Location** | |
 | 3 | **Get Contents of URL** | URL: `SCOUT_URL/api/upload` · Method: **POST** · Request Body: **Form** |
 | | Form field `photo` | type **File** ⟹ *Photo* (from step 1) |
-| | Form field `user_id` | type **Text** ⟹ your user ID |
+| | Form field `user_id` | type **Text** ⟹ your private Shortcut key |
 | | Form field `lat` | type **Text** ⟹ *Current Location* ⟹ **Latitude** |
 | | Form field `lng` | type **Text** ⟹ *Current Location* ⟹ **Longitude** |
 | 4 | **Get Dictionary Value** | Key: `message` from *Contents of URL* |

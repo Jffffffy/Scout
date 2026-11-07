@@ -120,6 +120,29 @@
     </section>
   </main>
 
+  <!-- login / sign up -->
+  <div id="auth" class="hidden fixed inset-0 z-[2500] bg-stone-900/60 flex items-center justify-center p-4">
+    <div class="w-full max-w-sm rounded-2xl bg-white p-6 fade-in">
+      <div class="text-center">
+        <div class="text-4xl">🧭</div>
+        <div class="font-bold text-xl mt-1">Welcome to Scout</div>
+        <div class="text-sm text-stone-500">Snap places, earn credits, find space.</div>
+      </div>
+      <div class="mt-5 grid grid-cols-2 rounded-xl bg-stone-100 p-1 text-sm font-semibold">
+        <button id="auth-tab-signup" class="rounded-lg py-2 bg-white shadow">Sign up</button>
+        <button id="auth-tab-login" class="rounded-lg py-2 text-stone-500">Log in</button>
+      </div>
+      <form id="auth-form" class="mt-4 space-y-3">
+        <input id="auth-user" autocomplete="username" autocapitalize="none" placeholder="Username"
+          class="w-full rounded-xl border border-stone-300 p-3 focus:outline-none focus:ring-2 focus:ring-red-700" />
+        <input id="auth-pass" type="password" autocomplete="current-password" placeholder="Password (4+ characters)"
+          class="w-full rounded-xl border border-stone-300 p-3 focus:outline-none focus:ring-2 focus:ring-red-700" />
+        <div id="auth-error" class="text-sm text-red-700 hidden"></div>
+        <button id="auth-submit" type="submit" class="w-full rounded-xl bg-red-700 py-3 text-white font-semibold">Create account · get 🪙5</button>
+      </form>
+    </div>
+  </div>
+
   <!-- account modal -->
   <div id="modal" class="hidden fixed inset-0 z-[2000] bg-black/40 flex items-end sm:items-center justify-center p-4">
     <div class="w-full max-w-sm rounded-2xl bg-white p-5 fade-in">
