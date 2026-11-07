@@ -289,6 +289,8 @@ def status():
         "mock_ai": vision.mock_mode(),
         "face_blur_ready": privacy.detector_ready(),
         "model": vision.VISION_MODEL,
+        "ask_model": vision.ASK_MODEL,
+        "fallback_model": vision.FALLBACK_MODEL,
         "rules": {
             "starter_credits": 5, "cost_detail": C.COST_DETAIL, "cost_ask": C.COST_ASK,
             "bounty": {"fresh": C.BOUNTY_FRESH, "stale": C.BOUNTY_STALE, "wanted": C.BOUNTY_WANTED},

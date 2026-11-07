@@ -118,7 +118,7 @@ shortcut/       how to build the one-tap iPhone Shortcut
 
 ## Tech
 
-FastAPI · OpenCV · OpenRouter (Gemini 2.5 Flash by default, configurable) · Leaflet · Tailwind
+FastAPI · OpenCV · OpenRouter (Gemini 4 Argon by default with automatic fallback to Gemini 2.5 Flash, configurable) · Leaflet · Tailwind
 
 ## What is mocked / next steps
 
