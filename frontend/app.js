@@ -272,13 +272,35 @@ function setSnapPlace(id) {
 }
 
 // Guess the place from GPS, but always show it so the user can correct it BEFORE the AI runs.
+let locationDenied = false;
 function detectPlace() {
   if (placeChosenByUser || !places.length) return;
-  if (!myPos) { $("snap-place-name").textContent = "Choose a place (location unavailable)"; return; }
+  if (!myPos) {
+    $("snap-place").value = "";
+    $("snap-place-name").textContent = locationDenied
+      ? "Location is off. Tap Change to pick the place."
+      : "Finding where you are…";
+    return;
+  }
   const sorted = [...places].sort((a, b) => distTo(a) - distTo(b));
   const near = sorted.filter((p) => distTo(p) <= 80);
   setSnapPlace(sorted[0].id);
+  $("snap-place-name").innerHTML = `<span class="text-xs font-semibold text-emerald-700">📍 Auto-detected</span><br>` + $("snap-place-name").innerHTML;
   if (near.length > 1) $("snap-place-name").innerHTML += ` <span class="text-xs text-amber-700">· ${near.length} places nearby, check it</span>`;
+}
+
+// go back to GPS auto-detect after a manual pick
+function useAutoDetect() {
+  $("picker").classList.add("hidden");
+  placeChosenByUser = false;
+  locationDenied = false;
+  myPos = null;
+  detectPlace();
+  if (!navigator.geolocation) { locationDenied = true; return detectPlace(); }
+  navigator.geolocation.getCurrentPosition(
+    (pos) => { myPos = { lat: pos.coords.latitude, lng: pos.coords.longitude }; showMe(); detectPlace(); },
+    () => { locationDenied = true; detectPlace(); toast("Allow location access to auto-detect", "bad"); },
+    { enableHighAccuracy: true, timeout: 10000 });
 }
 
 function openPicker(mode, reportId = null) {
@@ -288,6 +310,7 @@ function openPicker(mode, reportId = null) {
     ? "The AI will re-check the blurred photo for the place you pick. You can move a photo within 10 minutes."
     : "Closest places first. Not on the map? Add it.";
   $("picker-search").value = "";
+  $("picker-auto").classList.toggle("hidden", mode !== "select");
   showPickerList();
   $("picker").classList.remove("hidden");
 }
@@ -718,8 +741,8 @@ async function loadStatus() {
 function locate() {
   if (!navigator.geolocation) return;
   navigator.geolocation.getCurrentPosition(
-    (pos) => { myPos = { lat: pos.coords.latitude, lng: pos.coords.longitude }; showMe(); },
-    () => {}, { enableHighAccuracy: true, timeout: 8000 }
+    (pos) => { myPos = { lat: pos.coords.latitude, lng: pos.coords.longitude }; showMe(); detectPlace(); },
+    (err) => { if (err && err.code === 1) { locationDenied = true; detectPlace(); } }, { enableHighAccuracy: true, timeout: 8000 }
   );
   // keep the blue dot following the user
   navigator.geolocation.watchPosition(
@@ -743,6 +766,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("fix-here").onclick = () => getHere((lat, lng) => setFixSpot(lat, lng, "Your current location"));
   // place picker + add new place
   $("snap-place-change").onclick = () => openPicker("select");
+  $("picker-auto").onclick = useAutoDetect;
   $("picker-search").oninput = renderPickerList;
   $("picker-add").onclick = openAddForm;
   $("add-back").onclick = showPickerList;

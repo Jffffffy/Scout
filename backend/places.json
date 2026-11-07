@@ -5,7 +5,7 @@
     "category": "dining",
     "lat": 40.44336,
     "lng": -79.94212,
-    "description": "Au Bon Pain, Ciao Bella, Crisp and Crust, Revolution Noodle, True Burger, Nourish."
+    "description": "Au Bon Pain, Parrilla Del Sol, Crisp and Crust, Revolution Noodle, True Burger, Nourish."
   },
   {
     "id": "schatz",
@@ -17,11 +17,11 @@
   },
   {
     "id": "entropy",
-    "name": "Entropy+ & El Gallo de Oro",
+    "name": "Entropy+ & Yella's",
     "category": "dining",
     "lat": 40.4433,
     "lng": -79.9419,
-    "description": "Convenience store and Mexican food, Cohon Center ground floor."
+    "description": "Convenience store and Yella's, Cohon Center 1F."
   },
   {
     "id": "rohr-commons",
@@ -29,7 +29,7 @@
     "category": "dining",
     "lat": 40.44478,
     "lng": -79.94548,
-    "description": "Build Pizza, Capital Grains, Forbes Ave Subs, Millie's, Tepper Taqueria, E.A.T."
+    "description": "Build Pizza, Capital Grains, Forbes Ave Subs, Mercato A Mano, Millie's, Tepper Taqueria, E.A.T."
   },
   {
     "id": "exchange",
@@ -65,11 +65,11 @@
   },
   {
     "id": "rohr-cafe-gates",
-    "name": "Rohr Cafe (Gates)",
+    "name": "La Prima (Gates)",
     "category": "dining",
     "lat": 40.44355,
     "lng": -79.94462,
-    "description": "La Prima, Gates Hillman Center 3F."
+    "description": "Rohr Café, Gates Hillman Center 3F. Coffee, pastries, sandwiches."
   },
   {
     "id": "la-prima-wean",
@@ -121,11 +121,11 @@
   },
   {
     "id": "food-truck",
-    "name": "Tartan Food Truck",
+    "name": "Tartan Express Food Truck",
     "category": "dining",
     "lat": 40.444,
     "lng": -79.9427,
-    "description": "Mr. Bulgogi, Legacy Plaza."
+    "description": "K-Station rice and salad bowls, Legacy Plaza."
   },
   {
     "id": "hunt-1f",
