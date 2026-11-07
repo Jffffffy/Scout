@@ -3,6 +3,7 @@
  ## Team
    - Jessica Fang (@Jffffffy)
    - Helen Zhou (@helennnzmay)
+   - Zoe Yu (@yuzoe29)
 
 **Tell Scout what you need. It tells you where to go right now.**
 
