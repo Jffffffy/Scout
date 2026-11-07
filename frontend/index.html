@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Scout · the Waze for campus spaces</title>
+  <title>Spotty@CMU · the Waze for campus spaces</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -27,9 +27,9 @@
   <header class="sticky top-0 z-[1000] bg-white/90 backdrop-blur border-b border-stone-200">
     <div class="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
       <div class="flex items-center gap-2">
-        <span class="text-2xl">🧭</span>
+        <span class="text-2xl">📍</span>
         <div>
-          <div class="font-bold leading-tight">Scout</div>
+          <div class="font-bold leading-tight">Spotty@CMU</div>
           <div class="text-[11px] text-stone-500 leading-tight">Information is the currency. Stale places pay more.</div>
         </div>
       </div>
@@ -39,7 +39,7 @@
     </div>
     <nav class="max-w-3xl mx-auto px-4 flex gap-6 text-sm font-medium">
       <button data-tab="map" class="tab py-2 border-b-2 border-transparent">Map</button>
-      <button data-tab="ask" class="tab py-2 border-b-2 border-transparent">Ask Scout</button>
+      <button data-tab="ask" class="tab py-2 border-b-2 border-transparent">Ask Spotty</button>
       <button data-tab="snap" class="tab py-2 border-b-2 border-transparent">Snap &amp; Earn</button>
     </nav>
   </header>
@@ -67,7 +67,7 @@
         <div class="mt-2 flex flex-wrap gap-2" id="ask-examples"></div>
         <div class="mt-3 flex items-center justify-between">
           <span class="text-xs text-stone-500">Costs 🪙 2</span>
-          <button id="ask-btn" class="rounded-xl bg-red-700 px-5 py-2.5 text-white font-semibold disabled:opacity-50">Ask Scout</button>
+          <button id="ask-btn" class="rounded-xl bg-red-700 px-5 py-2.5 text-white font-semibold disabled:opacity-50">Ask Spotty</button>
         </div>
       </div>
       <div id="ask-results" class="mt-4 space-y-3"></div>
@@ -102,7 +102,7 @@
       </div>
 
       <div class="mt-4 rounded-2xl bg-white border border-stone-200 p-4">
-        <div class="font-semibold mb-2">🏆 Top scouts</div>
+        <div class="font-semibold mb-2">🏆 Top spotters</div>
         <ol id="leaderboard" class="text-sm space-y-1"></ol>
       </div>
 
@@ -115,7 +115,7 @@
             <tr><td class="py-1.5">Photo of a stale place</td><td class="text-right font-semibold">+3</td></tr>
             <tr><td class="py-1.5">Photo of a stale place someone is asking about</td><td class="text-right font-semibold">+5</td></tr>
             <tr><td class="py-1.5">See full details of a place</td><td class="text-right font-semibold">−1</td></tr>
-            <tr><td class="py-1.5">Ask Scout</td><td class="text-right font-semibold">−2</td></tr>
+            <tr><td class="py-1.5">Ask Spotty</td><td class="text-right font-semibold">−2</td></tr>
           </tbody>
         </table>
         <p class="mt-2 text-xs text-stone-500">Same place, same person: credits at most once per 10 minutes.</p>
@@ -127,8 +127,8 @@
   <div id="auth" class="hidden fixed inset-0 z-[2500] bg-stone-900/60 flex items-center justify-center p-4">
     <div class="w-full max-w-sm rounded-2xl bg-white p-6 fade-in">
       <div class="text-center">
-        <div class="text-4xl">🧭</div>
-        <div class="font-bold text-xl mt-1">Welcome to Scout</div>
+        <div class="text-4xl">📍</div>
+        <div class="font-bold text-xl mt-1">Welcome to Spotty@CMU</div>
         <div class="text-sm text-stone-500">Snap places, earn credits, find space.</div>
       </div>
       <div class="mt-5 grid grid-cols-2 rounded-xl bg-stone-100 p-1 text-sm font-semibold">
@@ -245,7 +245,7 @@
   <!-- account modal -->
   <div id="modal" class="hidden fixed inset-0 z-[2000] bg-black/40 flex items-end sm:items-center justify-center p-4">
     <div class="w-full max-w-sm rounded-2xl bg-white p-5 fade-in">
-      <div class="font-bold text-lg">Your Scout account</div>
+      <div class="font-bold text-lg">Your Spotty account</div>
       <div id="modal-body" class="mt-3 text-sm space-y-3"></div>
       <button id="modal-close" class="mt-4 w-full rounded-xl bg-stone-900 py-2.5 text-white font-semibold">Done</button>
     </div>

@@ -1,4 +1,4 @@
-// Scout frontend: plain JS, no build step.
+// Spotty frontend: plain JS, no build step.
 const API = "";  // same origin as the FastAPI server
 
 const CAT_ICON = { study: "📚", dining: "🍜", lounge: "🛋️", gym: "🏋️", laundry: "🧺" };
@@ -579,7 +579,7 @@ async function ask() {
   const query = $("ask-input").value.trim();
   if (!query) return toast("Type what you need first");
   const btn = $("ask-btn");
-  btn.disabled = true; btn.textContent = "Scouting…";
+  btn.disabled = true; btn.textContent = "Spotting…";
   $("ask-results").innerHTML = `<div class="text-sm text-stone-500">Checking every place on campus…</div>`;
   try {
     const body = { user_id: user.id, query, ...(myPos || {}) };
@@ -610,7 +610,7 @@ async function ask() {
     toast(e.message, "bad");
     if (e.status === 402) showTab("snap");
   } finally {
-    btn.disabled = false; btn.textContent = "Ask Scout";
+    btn.disabled = false; btn.textContent = "Ask Spotty";
   }
 }
 
@@ -692,7 +692,7 @@ async function loadLeaderboard() {
     const rows = await api("/api/leaderboard");
     $("leaderboard").innerHTML = rows.length
       ? rows.map((r, i) => `<li class="flex justify-between"><span>${["🥇", "🥈", "🥉"][i] || `${i + 1}.`} ${esc(r.name)}</span><span class="text-stone-500">${r.uploads} photos</span></li>`).join("")
-      : `<li class="text-stone-500">No photos yet. Be the first scout!</li>`;
+      : `<li class="text-stone-500">No photos yet. Be the first spotter!</li>`;
   } catch {}
 }
 

@@ -1,6 +1,6 @@
 # iPhone Shortcut: one tap to snap and earn
 
-The Shortcut takes a photo, adds your location, uploads it to Scout and shows how many credits you earned.
+The Shortcut takes a photo, adds your location, uploads it to Spotty and shows how many credits you earned.
 
 ## 0. The link
 
@@ -25,12 +25,12 @@ Open `SCOUT_URL` on the phone, sign up or log in, tap the 🪙 balance in the to
 | 5 | **Get Dictionary Value** | Key: `message` from *Contents of URL* |
 | 6 | **Show Notification** | *Dictionary Value* |
 
-Name it **Scout Snap**.
+Name it **Spotty Snap**.
 
 ## 3. Make it one tap
 
 - Add it to the Home Screen (Share ⟹ Add to Home Screen), or
-- Settings ⟹ Accessibility ⟹ Touch ⟹ **Back Tap** ⟹ Double Tap ⟹ *Scout Snap*, or
+- Settings ⟹ Accessibility ⟹ Touch ⟹ **Back Tap** ⟹ Double Tap ⟹ *Spotty Snap*, or
 - On iPhone 15 Pro and later: assign it to the **Action Button**.
 
 Android: use the **Snap & Earn** tab in the browser (it opens the camera directly) and add the page to the home screen.
