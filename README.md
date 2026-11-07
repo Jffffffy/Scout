@@ -1,5 +1,9 @@
 # 🧭 Scout: the Waze for campus spaces
 
+ ## Team
+   - Jessica Fang (@Jffffffy)
+   - Helen Zhou (@helennnzmay)
+
 **Tell Scout what you need. It tells you where to go right now.**
 
 Students waste time walking to a full library floor, a long lunch line, or a laundry room with no free machine. Scout turns quick student photos into live, structured information about campus spaces, and pays people in credits for keeping it fresh.
