@@ -26,6 +26,7 @@ STALE_MINUTES = {
 # Busy levels
 # ---------------------------------------------------------------------------
 NOT_BUSY, MODERATE, BUSY = "not_busy", "moderate", "busy"
+SEVERITY = [NOT_BUSY, MODERATE, BUSY]
 LOW_RATE, HIGH_RATE = 0.40, 0.70          # occupancy thresholds
 LINE_LOW, LINE_HIGH = 3, 10               # dining line thresholds (people)
 MAX_REPORTS_PER_PLACE = 10
@@ -93,8 +94,9 @@ def summarize(category: str, reports: list) -> dict:
     if pairs:
         occ, tot = sum(p[0] for p in pairs), sum(p[1] for p in pairs)
         out.update(occupied=occ, total=tot, occupancy=round(occ / tot, 2))
-        if "level" not in out:
-            out["level"] = level_from_rate(occ / tot)
+        seat_level = level_from_rate(occ / tot)
+        # dining: use whichever is busier, the line or the seats
+        out["level"] = max(out.get("level", NOT_BUSY), seat_level, key=SEVERITY.index)
     if "level" not in out:  # AI could not count anything: use its overall impression (majority vote)
         votes = [d.get("crowd") for d in datas if d.get("crowd") in (NOT_BUSY, MODERATE, BUSY)]
         if votes:

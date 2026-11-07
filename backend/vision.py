@@ -135,7 +135,8 @@ Step 2. If valid, describe the current state using ONLY what you can see.
 Step 3. Give bounding boxes as [ymin, xmin, ymax, xmax] on a 0-1000 scale
 (0,0 = top-left of the image, 1000,1000 = bottom-right):
 - "people": one box per visible person, covering the WHOLE body (head to feet).
-- "empty_seats": one box per empty, unreserved seat.
+- "empty_seats": one box per empty, unreserved seat. Box ONLY the chair or stool itself
+  (seat and backrest), never the table or desk. Boxes must not overlap each other.
 
 Reply with ONE JSON object and nothing else:
 {{

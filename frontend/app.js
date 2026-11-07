@@ -414,6 +414,16 @@ async function upload() {
   const s = [step("Blurring faces and removing photo metadata"), step("AI is checking the photo"), step("Updating the map")];
   try {
     const d = await api("/api/upload", { method: "POST", body: fd });
+    if (d.needs_choice) {  // several places nearby: let the user pick, keep the same photo
+      $("snap-steps").innerHTML = "";
+      $("snap-result").innerHTML = `<div class="fade-in rounded-xl p-3 bg-amber-50 text-amber-900">
+        <div class="font-semibold">Which place is this?</div>
+        <div class="mt-2 flex flex-wrap gap-2">${d.options.map((o) =>
+          `<button class="pick rounded-full bg-white border border-amber-300 px-3 py-1 text-sm" data-id="${o.id}">${CAT_ICON[o.category] || ""} ${esc(o.name)}</button>`).join("")}</div></div>`;
+      document.querySelectorAll(".pick").forEach((b) => (b.onclick = () => { $("snap-place").value = b.dataset.id; upload(); }));
+      $("snap-btn").disabled = false;
+      return;
+    }
     s.forEach((el) => (el.firstChild.textContent = "✅"));
     step(d.accepted ? "Original deleted. Only the blurred, covered version is kept (until it goes stale)." : "Photo deleted.", true);
     setBalance(d.credits);

@@ -200,6 +200,14 @@
     "description": "Open seating and group rooms in the Tepper Building."
   },
   {
+    "id": "tepper-3808",
+    "name": "Tepper Quad 3808",
+    "category": "study",
+    "lat": 40.4447,
+    "lng": -79.94535,
+    "description": "Classroom / study room on the 3rd floor of the Tepper Building."
+  },
+  {
     "id": "scaife-study",
     "name": "Scaife Hall",
     "category": "study",

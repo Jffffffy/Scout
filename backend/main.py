@@ -216,8 +216,19 @@ async def upload(
     if place_id and place_id in store.places:
         place = store.places[place_id]
     if lat is not None and lng is not None:
-        nearest = min(store.places.values(), key=lambda p: C.distance_m(lat, lng, p["lat"], p["lng"]))
+        by_dist = sorted(store.places.values(), key=lambda p: C.distance_m(lat, lng, p["lat"], p["lng"]))
+        nearest = by_dist[0]
         if place is None:
+            # GPS cannot tell rooms in the same building apart: if several places are close, let the user pick.
+            nearby = [p for p in by_dist if C.distance_m(lat, lng, p["lat"], p["lng"]) <= C.GPS_RADIUS_M]
+            if len(nearby) > 1:
+                names = ", ".join(p["name"] for p in nearby[:6])
+                return JSONResponse(status_code=200, content={
+                    "accepted": False, "needs_choice": True, "credits_earned": 0, "credits": user["credits"],
+                    "photo_stored": False,
+                    "message": f"Several places are near you ({names}). Pick one and upload again.",
+                    "options": [{"id": p["id"], "name": p["name"], "category": p["category"]} for p in nearby[:8]],
+                })
             place = nearest
         dist = C.distance_m(lat, lng, place["lat"], place["lng"])  # distance to the place actually used
         if not DEMO_MODE and dist > C.GPS_RADIUS_M:
