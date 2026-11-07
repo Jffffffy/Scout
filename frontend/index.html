@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Scout · the Waze for campus spaces</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+    #map { height: calc(100vh - 168px); min-height: 360px; }
+    .tab-active { color: #b91c1c; border-color: #b91c1c; }
+    .pin { width: 34px; height: 34px; border-radius: 9999px; border: 3px solid white;
+           box-shadow: 0 2px 6px rgba(0,0,0,.35); display: flex; align-items: center;
+           justify-content: center; font-size: 16px; }
+    .bounty { position: absolute; top: -10px; right: -14px; background: #111827; color: #fde68a;
+              font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 9999px; white-space: nowrap; }
+    .leaflet-div-icon { background: transparent; border: none; }
+    .fade-in { animation: fade .25s ease-out; }
+    @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  </style>
+</head>
+<body class="bg-stone-50 text-stone-900">
+
+  <!-- header -->
+  <header class="sticky top-0 z-[1000] bg-white/90 backdrop-blur border-b border-stone-200">
+    <div class="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <span class="text-2xl">🧭</span>
+        <div>
+          <div class="font-bold leading-tight">Scout</div>
+          <div class="text-[11px] text-stone-500 leading-tight">Information is the currency. Stale places pay more.</div>
+        </div>
+      </div>
+      <button id="account-btn" class="flex items-center gap-2 rounded-full bg-amber-100 px-3 py-1.5 text-sm font-semibold text-amber-900">
+        <span>🪙</span><span id="balance">–</span>
+      </button>
+    </div>
+    <nav class="max-w-3xl mx-auto px-4 flex gap-6 text-sm font-medium">
+      <button data-tab="map" class="tab py-2 border-b-2 border-transparent">Map</button>
+      <button data-tab="ask" class="tab py-2 border-b-2 border-transparent">Ask Scout</button>
+      <button data-tab="snap" class="tab py-2 border-b-2 border-transparent">Snap &amp; Earn</button>
+    </nav>
+  </header>
+
+  <div id="banner" class="hidden max-w-3xl mx-auto px-4 pt-2"></div>
+
+  <main class="max-w-3xl mx-auto px-4 py-3">
+
+    <!-- MAP -->
+    <section id="tab-map" class="tab-panel">
+      <div class="flex flex-wrap gap-3 text-xs text-stone-600 mb-2">
+        <span>🟢 easy to use</span><span>🟡 busy</span><span>🔴 full</span><span>⚪ stale or no report</span>
+        <span class="ml-auto">🪙 badge = bounty for a fresh photo</span>
+      </div>
+      <div id="map" class="rounded-2xl overflow-hidden border border-stone-200"></div>
+    </section>
+
+    <!-- ASK -->
+    <section id="tab-ask" class="tab-panel hidden">
+      <div class="rounded-2xl bg-white border border-stone-200 p-4">
+        <label class="text-sm font-semibold">What do you need right now?</label>
+        <textarea id="ask-input" rows="3" class="mt-2 w-full rounded-xl border border-stone-300 p-3 focus:outline-none focus:ring-2 focus:ring-red-700"
+          placeholder="A quiet spot with an outlet for my laptop, close to Tepper"></textarea>
+        <div class="mt-2 flex flex-wrap gap-2" id="ask-examples"></div>
+        <div class="mt-3 flex items-center justify-between">
+          <span class="text-xs text-stone-500">Costs 🪙 2</span>
+          <button id="ask-btn" class="rounded-xl bg-red-700 px-5 py-2.5 text-white font-semibold disabled:opacity-50">Ask Scout</button>
+        </div>
+      </div>
+      <div id="ask-results" class="mt-4 space-y-3"></div>
+    </section>
+
+    <!-- SNAP -->
+    <section id="tab-snap" class="tab-panel hidden">
+      <div class="rounded-2xl bg-white border border-stone-200 p-4">
+        <div class="font-semibold">Snap a place, earn credits</div>
+        <p class="text-sm text-stone-600 mt-1">
+          Faces are blurred before the AI sees anything. The photo is deleted right after analysis. Only the result is kept.
+        </p>
+
+        <label class="block mt-4 text-sm font-medium">Place</label>
+        <select id="snap-place" class="mt-1 w-full rounded-xl border border-stone-300 p-2.5 bg-white">
+          <option value="">Auto-detect from my location</option>
+        </select>
+
+        <label for="snap-file" class="mt-4 flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-stone-300 p-8 cursor-pointer hover:bg-stone-50">
+          <span class="text-4xl">📸</span>
+          <span class="font-semibold">Take or choose a photo</span>
+          <span id="snap-filename" class="text-xs text-stone-500"></span>
+        </label>
+        <input id="snap-file" type="file" accept="image/*" capture="environment" class="hidden" />
+        <img id="snap-preview" class="hidden mt-3 max-h-64 rounded-xl mx-auto" alt="preview" />
+
+        <button id="snap-btn" class="mt-4 w-full rounded-xl bg-red-700 py-3 text-white font-semibold disabled:opacity-50" disabled>Upload</button>
+        <div id="snap-steps" class="mt-4 space-y-1 text-sm"></div>
+        <div id="snap-result" class="mt-3"></div>
+      </div>
+
+      <div class="mt-4 rounded-2xl bg-white border border-stone-200 p-4">
+        <div class="font-semibold mb-2">🏆 Top scouts</div>
+        <ol id="leaderboard" class="text-sm space-y-1"></ol>
+      </div>
+
+      <div class="mt-4 rounded-2xl bg-white border border-stone-200 p-4 text-sm">
+        <div class="font-semibold mb-2">How credits work</div>
+        <table class="w-full text-left">
+          <tbody class="divide-y divide-stone-100">
+            <tr><td class="py-1.5">New account</td><td class="text-right font-semibold">+5</td></tr>
+            <tr><td class="py-1.5">Photo of a place that was just updated</td><td class="text-right font-semibold">+1</td></tr>
+            <tr><td class="py-1.5">Photo of a stale place</td><td class="text-right font-semibold">+3</td></tr>
+            <tr><td class="py-1.5">Photo of a stale place someone is asking about</td><td class="text-right font-semibold">+5</td></tr>
+            <tr><td class="py-1.5">See full details of a place</td><td class="text-right font-semibold">−1</td></tr>
+            <tr><td class="py-1.5">Ask Scout</td><td class="text-right font-semibold">−2</td></tr>
+          </tbody>
+        </table>
+        <p class="mt-2 text-xs text-stone-500">Same place, same person: credits at most once per 10 minutes.</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- account modal -->
+  <div id="modal" class="hidden fixed inset-0 z-[2000] bg-black/40 flex items-end sm:items-center justify-center p-4">
+    <div class="w-full max-w-sm rounded-2xl bg-white p-5 fade-in">
+      <div class="font-bold text-lg">Your Scout account</div>
+      <div id="modal-body" class="mt-3 text-sm space-y-3"></div>
+      <button id="modal-close" class="mt-4 w-full rounded-xl bg-stone-900 py-2.5 text-white font-semibold">Done</button>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

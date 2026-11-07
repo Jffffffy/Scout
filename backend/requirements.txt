@@ -1,0 +1,8 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+python-multipart>=0.0.9
+requests>=2.31
+python-dotenv>=1.0
+numpy>=1.26
+# 4.x ships the Haar face models we use for blurring
+opencv-python-headless>=4.8,<5

@@ -1,0 +1,50 @@
+[
+  {
+    "id": "hunt",
+    "name": "Hunt Library",
+    "category": "study",
+    "lat": 40.44108,
+    "lng": -79.94374,
+    "description": "Main library. Quiet floors, group tables, outlets along the walls."
+  },
+  {
+    "id": "gates",
+    "name": "Gates Hillman Center",
+    "category": "study",
+    "lat": 40.44348,
+    "lng": -79.94457,
+    "description": "CS building. Open study areas, whiteboards, busy near OH."
+  },
+  {
+    "id": "entropy",
+    "name": "Entropy+",
+    "category": "dining",
+    "lat": 40.44330,
+    "lng": -79.94196,
+    "description": "Convenience store in the Cohon Center. Checkout line gets long at noon."
+  },
+  {
+    "id": "tepper",
+    "name": "Tepper Quad Cafe",
+    "category": "dining",
+    "lat": 40.44475,
+    "lng": -79.94558,
+    "description": "Food stations and seating in the Tepper Quad."
+  },
+  {
+    "id": "cuc-gym",
+    "name": "CUC Fitness Center",
+    "category": "gym",
+    "lat": 40.44352,
+    "lng": -79.94175,
+    "description": "Cardio machines, racks and free weights in the Cohon Center."
+  },
+  {
+    "id": "morewood-laundry",
+    "name": "Morewood Laundry Room",
+    "category": "laundry",
+    "lat": 40.44590,
+    "lng": -79.94290,
+    "description": "Front-load washers and dryers for Morewood residents."
+  }
+]
