@@ -60,6 +60,9 @@ def _public_place(place, now=None):
         "minutes_old": None if not state else round(C.minutes_since(state["updated_at"], now)),
         "stale_after": round(C.stale_after_minutes(place["category"], state["data"] if state else None)),
         "bounty": C.bounty(place, state, store.demand.get(place["id"]), now),
+        "room_note": place.get("room_note"),
+        "pending_fixes": len(store.fixes.get(place["id"], [])),
+        "corrected": bool(place.get("corrected")),
     }
 
 
@@ -193,6 +196,66 @@ def report_photo(report_id: str, user_id: str):
         raise HTTPException(402, "Unlock this place (1 credit) to see its photos.")
     return Response(content=report["photo"], media_type="image/jpeg",
                     headers={"Cache-Control": "private, no-store"})
+
+
+# ---------------------------------------------------------------------------
+# crowd-sourced location fixes: 2 people agree within 40 m -> pin moves, both earn +2
+# ---------------------------------------------------------------------------
+class FixBody(BaseModel):
+    user_id: str
+    lat: float
+    lng: float
+    note: Optional[str] = None
+
+
+@app.post("/api/places/{place_id}/fix")
+def fix_location(place_id: str, body: FixBody):
+    place = store.places.get(place_id)
+    if not place:
+        raise HTTPException(404, "Unknown place")
+    user = _user_or_404(body.user_id)
+    lat_min, lat_max, lng_min, lng_max = C.CAMPUS_BOX
+    if not (lat_min <= body.lat <= lat_max and lng_min <= body.lng <= lng_max):
+        raise HTTPException(400, "That spot is outside the CMU campus area.")
+    note = (body.note or "").strip()[:80] or None
+    pending = store.fixes.setdefault(place_id, [])
+    if any(f["user_id"] == user["id"] for f in pending):
+        raise HTTPException(400, "You already suggested a spot for this place. Waiting for someone to confirm it.")
+    if C.distance_m(body.lat, body.lng, place["lat"], place["lng"]) < C.FIX_MIN_MOVE_M and not note:
+        raise HTTPException(400, "That is basically where the pin already is.")
+
+    mine = {"user_id": user["id"], "lat": body.lat, "lng": body.lng, "note": note, "ts": time.time()}
+    match = next((f for f in pending
+                  if f["user_id"] != user["id"]
+                  and C.distance_m(f["lat"], f["lng"], body.lat, body.lng) <= C.FIX_AGREE_M), None)
+    if not match:
+        pending.append(mine)
+        return {"status": "pending", "credits": user["credits"], "credits_earned": 0,
+                "message": f"Thanks! When one more person suggests a spot within {C.FIX_AGREE_M} m of yours, "
+                           f"the pin moves and you both get +{C.FIX_REWARD}."}
+
+    # two people agree: move the pin to the midpoint and pay both
+    old = (place["lat"], place["lng"])
+    with store.lock:
+        place["lat"] = round((match["lat"] + body.lat) / 2, 6)
+        place["lng"] = round((match["lng"] + body.lng) / 2, 6)
+        place["corrected"] = True
+        place["room_note"] = note or match.get("note") or place.get("room_note")
+        store.fixes[place_id] = []
+    store.add_credits(match["user_id"], C.FIX_REWARD)
+    store.add_credits(user["id"], C.FIX_REWARD)
+    moved = round(C.distance_m(old[0], old[1], place["lat"], place["lng"]))
+    return {"status": "moved", "credits": user["credits"], "credits_earned": C.FIX_REWARD,
+            "lat": place["lat"], "lng": place["lng"], "moved_m": moved,
+            "message": f"Confirmed by 2 people! {place['name']} moved {moved} m. You both earned +{C.FIX_REWARD}."}
+
+
+@app.get("/api/places-export")
+def export_places():
+    """Current places (with crowd-corrected coordinates) in the same format as places.json,
+    so fixes can be saved permanently into the repo."""
+    keys = ("id", "name", "category", "lat", "lng", "description", "room_note")
+    return [{k: p[k] for k in keys if p.get(k) is not None} for p in store.places.values()]
 
 
 # ---------------------------------------------------------------------------

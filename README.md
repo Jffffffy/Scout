@@ -59,6 +59,14 @@ Original photo ⟹ faces blurred ⟹ AI finds every person and every empty seat 
 gray block (whole body) and each free seat is outlined in green. Only this covered copy is kept, and only until
 the place goes stale (max 30 min). Viewing an area's summary and photos costs 1 credit (free again for 30 min).
 
+### Fix a wrong pin (crowd-sourced map)
+
+Pins start at approximate coordinates. Anyone can tap **📍 Wrong location?** and suggest the right spot by
+searching a building (OpenStreetMap, limited to campus), tapping the map, or using their GPS, plus an optional
+floor / room note. When **2 different people** suggest spots within **40 m**, the pin moves to their midpoint and
+both earn **+2**. One suggestion per person per place. `GET /api/places-export` returns the corrected list in
+`places.json` format so fixes can be saved permanently.
+
 ### Freshness
 
 | Place type | Goes stale after |
@@ -123,6 +131,8 @@ cloudflared tunnel --url http://localhost:8000
 | GET | `/api/reports/{id}/photo?user_id=` | Blurred, covered photo (uploader, or after unlocking the place) |
 | POST | `/api/upload` | Form: `photo`, `user_id`, `lat`, `lng`, optional `place_id` |
 | POST | `/api/ask` | JSON: `user_id`, `query`, optional `lat`, `lng` (−2) |
+| POST | `/api/places/{id}/fix` | JSON `user_id`, `lat`, `lng`, optional `note`: suggest the right spot |
+| GET | `/api/places-export` | Places with crowd-corrected coordinates |
 | GET | `/api/leaderboard` | Top scouts |
 | GET | `/api/status` | Demo / mock flags and all rules |
 

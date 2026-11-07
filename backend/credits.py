@@ -113,6 +113,12 @@ COST_DETAIL = 1
 COST_ASK = 2
 
 GPS_RADIUS_M = 80
+
+# location fixes: 2 different people must agree within this distance
+FIX_AGREE_M = 40
+FIX_REWARD = 2
+FIX_MIN_MOVE_M = 15            # suggestions closer than this to the current pin are ignored
+CAMPUS_BOX = (40.4330, 40.4530, -79.9600, -79.9300)  # lat_min, lat_max, lng_min, lng_max
 UPLOAD_COOLDOWN_MIN = 10
 
 

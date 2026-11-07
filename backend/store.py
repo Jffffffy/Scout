@@ -31,6 +31,8 @@ class Store:
         # {"id", "data", "updated_at", "user_id", "photo": blurred+annotated JPEG bytes or None}
         # Photos are dropped as soon as the report goes stale (max 30 min).
         self.reports: Dict[str, List[Dict[str, Any]]] = {}
+        # place_id -> pending location suggestions [{"user_id", "lat", "lng", "note", "ts"}]
+        self.fixes: Dict[str, List[Dict[str, Any]]] = {}
         # (user_id, place_id) -> time the user paid to see this place's details + photos
         self.unlocks: Dict[tuple, float] = {}
         # user_id -> {"id", "name", "credits", "uploads", "created_at", "_salt", "_pw"}
@@ -98,6 +100,11 @@ class Store:
             user["credits"] += amount
             user["uploads"] += 1
             self.last_award[(user_id, place_id)] = time.time()
+
+    def add_credits(self, user_id: str, amount: int) -> None:
+        with self.lock:
+            if user_id in self.users:
+                self.users[user_id]["credits"] += amount
 
     def leaderboard(self, limit: int = 10) -> List[Dict[str, Any]]:
         users = sorted(self.users.values(), key=lambda u: u["uploads"], reverse=True)

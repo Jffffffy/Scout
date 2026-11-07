@@ -18,6 +18,9 @@ let places = [];
 let map, markers = {};
 let myPos = null, myDot = null;
 let activeCat = "all";
+let fix = null;        // {placeId, lat, lng, label} while fixing a pin
+let fixMarker = null;  // draggable preview marker
+let pickMode = false;  // waiting for a tap on the map
 
 // ---------- storage (wrapped: may be unavailable) ----------
 const store = {
@@ -163,6 +166,93 @@ function initMap() {
     },
   });
   map.addControl(new Ctl());
+  map.on("click", (e) => {
+    if (!pickMode) return;
+    pickMode = false;
+    setFixSpot(e.latlng.lat, e.latlng.lng, "Spot you tapped on the map");
+    $("fix").classList.remove("hidden");
+  });
+}
+
+// ---------- fix a wrong pin ----------
+window.openFix = (placeId) => {
+  const p = places.find((x) => x.id === placeId);
+  if (!p) return;
+  map.closePopup();
+  fix = { placeId, lat: null, lng: null, label: "" };
+  $("fix-place").textContent = `${CAT_ICON[p.category] || ""} ${p.name}`;
+  $("fix-search").value = "";
+  $("fix-results").innerHTML = "";
+  $("fix-note").value = p.room_note || "";
+  $("fix-chosen").textContent = "No spot chosen yet.";
+  $("fix-submit").disabled = true;
+  $("fix").classList.remove("hidden");
+};
+
+function setFixSpot(lat, lng, label) {
+  fix.lat = lat; fix.lng = lng; fix.label = label;
+  $("fix-chosen").innerHTML = `<b>${esc(label)}</b><br><span class="text-xs">${lat.toFixed(5)}, ${lng.toFixed(5)} · drag the red pin on the map to fine-tune</span>`;
+  $("fix-submit").disabled = false;
+  if (fixMarker) fixMarker.setLatLng([lat, lng]);
+  else {
+    fixMarker = L.marker([lat, lng], { draggable: true, zIndexOffset: 1000 }).addTo(map).bindTooltip("Suggested spot");
+    fixMarker.on("dragend", () => { const ll = fixMarker.getLatLng(); setFixSpot(ll.lat, ll.lng, "Spot you dragged to"); });
+  }
+}
+
+function closeFix() {
+  $("fix").classList.add("hidden");
+  pickMode = false;
+  if (fixMarker) { fixMarker.remove(); fixMarker = null; }
+  fix = null;
+}
+
+async function searchBuilding(ev) {
+  ev.preventDefault();
+  const q = $("fix-search").value.trim();
+  if (!q) return;
+  $("fix-results").innerHTML = `<div class="text-xs text-stone-500">Searching…</div>`;
+  // OpenStreetMap search, limited to the CMU campus box. Only runs on Enter / button (usage policy).
+  const url = "https://nominatim.openstreetmap.org/search?format=json&limit=6&bounded=1"
+    + "&viewbox=-79.9600,40.4530,-79.9300,40.4330&q=" + encodeURIComponent(q);
+  try {
+    const res = await fetch(url, { headers: { "Accept-Language": "en" } });
+    const rows = await res.json();
+    if (!rows.length) {
+      $("fix-results").innerHTML = `<div class="text-xs text-stone-500">No building found on campus. Try another name, or tap on the map.</div>`;
+      return;
+    }
+    $("fix-results").innerHTML = rows.map((r, i) =>
+      `<button data-i="${i}" class="res w-full text-left rounded-lg border border-stone-200 px-3 py-2 text-sm hover:bg-stone-50">${esc(r.display_name.split(",").slice(0, 2).join(","))}</button>`).join("");
+    document.querySelectorAll(".res").forEach((b) => (b.onclick = () => {
+      const r = rows[+b.dataset.i];
+      setFixSpot(+r.lat, +r.lon, r.display_name.split(",")[0]);
+      map.setView([+r.lat, +r.lon], 18);
+      $("fix-results").innerHTML = "";
+    }));
+  } catch {
+    $("fix-results").innerHTML = `<div class="text-xs text-red-700">Search is unavailable right now. Tap on the map instead.</div>`;
+  }
+}
+
+async function submitFix() {
+  if (!fix || fix.lat == null) return;
+  $("fix-submit").disabled = true;
+  try {
+    const d = await api(`/api/places/${fix.placeId}/fix`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: user.id, lat: fix.lat, lng: fix.lng, note: $("fix-note").value }),
+    });
+    setBalance(d.credits);
+    toast(d.message, d.status === "moved" ? "good" : "info");
+    const id = fix.placeId;
+    closeFix();
+    await loadPlaces();
+    if (d.status === "moved" && markers[id]) { markers[id].setLatLng([d.lat, d.lng]); map.flyTo([d.lat, d.lng], 18); }
+  } catch (e) {
+    toast(e.message, "bad");
+    $("fix-submit").disabled = false;
+  }
 }
 
 function showMe() {
@@ -219,10 +309,13 @@ function popupHtml(p) {
   return `<div style="min-width:200px">
     <div style="font-weight:700;font-size:14px">${esc(p.name)}</div>
     <div style="margin:2px 0">${status} · <span style="color:#78716c">${freshnessText(p)}</span></div>
+    ${p.room_note ? `<div style="font-size:12px">📌 ${esc(p.room_note)}</div>` : ""}
     <div style="color:#78716c;font-size:12px">Snap it now for 🪙 ${p.bounty}</div>
     <div id="detail-${p.id}" style="margin-top:6px"></div>
     <button onclick="openPlace('${p.id}')" style="margin-top:6px;width:100%;background:#b91c1c;color:white;border-radius:8px;padding:6px;font-weight:600">
       ${p.fresh ? "See details &amp; photos · 🪙1" : "Request a report (free)"}</button>
+    <button onclick="openFix('${p.id}')" style="margin-top:6px;width:100%;color:#57534e;font-size:12px;text-decoration:underline">
+      📍 Wrong location?${p.pending_fixes ? ` (${p.pending_fixes} waiting for a 2nd person)` : ""}${p.corrected ? " · ✅ fixed by students" : ""}</button>
   </div>`;
 }
 
@@ -232,6 +325,7 @@ async function loadPlaces() {
     const icon = L.divIcon({ html: pinHtml(p), iconSize: [34, 34], iconAnchor: [17, 17] });
     if (markers[p.id]) {
       markers[p.id].setIcon(icon);
+      markers[p.id].setLatLng([p.lat, p.lng]);
       if (!markers[p.id].isPopupOpen()) markers[p.id].setPopupContent(popupHtml(p));
     } else {
       markers[p.id] = L.marker([p.lat, p.lng], { icon }).addTo(map).bindPopup(popupHtml(p));
@@ -289,7 +383,8 @@ window.openPlace = async (placeId) => {
       <div class="flex items-start gap-2">
         <span class="text-2xl">${CAT_ICON[d.category] || "📍"}</span>
         <div><div class="font-bold text-lg leading-tight">${esc(d.name)}</div>
-        <div class="text-xs text-stone-500">${esc(d.description || "")}</div></div>
+        <div class="text-xs text-stone-500">${esc(d.description || "")}</div>
+        ${d.room_note ? `<div class="text-xs">📌 ${esc(d.room_note)}</div>` : ""}</div>
       </div>
       <div class="mt-3 rounded-xl bg-stone-50 p-3">
         <div class="text-xs font-semibold text-stone-500 uppercase tracking-wide">AI summary of this area</div>
@@ -495,6 +590,16 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("account-btn").onclick = openAccount;
   $("modal-close").onclick = () => $("modal").classList.add("hidden");
   $("sheet-close").onclick = () => $("sheet").classList.add("hidden");
+  $("fix-search-form").onsubmit = searchBuilding;
+  $("fix-cancel").onclick = closeFix;
+  $("fix-submit").onclick = submitFix;
+  $("fix-tap").onclick = () => { pickMode = true; $("fix").classList.add("hidden"); showTab("map"); toast("Tap the correct spot on the map"); };
+  $("fix-here").onclick = () => {
+    if (myPos) return setFixSpot(myPos.lat, myPos.lng, "Your current location");
+    navigator.geolocation?.getCurrentPosition(
+      (pos) => { myPos = { lat: pos.coords.latitude, lng: pos.coords.longitude }; setFixSpot(myPos.lat, myPos.lng, "Your current location"); },
+      () => toast("Allow location access to use this", "bad"), { enableHighAccuracy: true, timeout: 10000 });
+  };
   $("ask-btn").onclick = ask;
   $("snap-file").onchange = onFile;
   $("snap-btn").onclick = upload;
