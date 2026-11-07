@@ -135,6 +135,10 @@ class Store:
             for r in reps:
                 if r not in fresh:
                     r["photo"] = None  # drop image bytes right away
+                    r["_blurred"] = None
+            for r in fresh:  # blurred working copy (for "wrong place?") lives max 10 min
+                if r.get("_blurred") is not None and now > r.get("_blurred_until", 0):
+                    r["_blurred"] = None
             self.reports[place_id] = fresh
 
     def fresh_reports(self, place_id: str) -> List[Dict[str, Any]]:
@@ -147,6 +151,15 @@ class Store:
         """Newest report (fresh or stale), or None if the place was never reported."""
         reps = self.reports.get(place_id)
         return reps[0] if reps else None
+
+    def remove_report(self, place_id: str, report_id: str) -> None:
+        with self.lock:
+            self.reports[place_id] = [r for r in self.reports.get(place_id, []) if r["id"] != report_id]
+
+    def add_place(self, place: Dict[str, Any]) -> Dict[str, Any]:
+        with self.lock:
+            self.places[place["id"]] = place
+        return place
 
     def find_report(self, report_id: str):
         for place_id, reps in self.reports.items():

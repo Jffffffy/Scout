@@ -59,6 +59,14 @@ Original photo ⟹ faces blurred ⟹ AI finds every person and every empty seat 
 gray block (whole body) and each free seat is outlined in green. Only this covered copy is kept, and only until
 the place goes stale (max 30 min). Viewing an area's summary and photos costs 1 credit (free again for 30 min).
 
+### Students grow the map
+
+- **Before upload** the app guesses the place from GPS and shows it, so the user can change it before the AI runs.
+- **After upload**, "Wrong place?" moves the photo to the right place within 10 minutes (the AI re-checks it).
+- **Not on the map?** Add it: name, category, location (GPS / building search / tap the map), optional room.
+  New places show 🆕 until someone else's photo there passes the AI check, then the creator earns +2.
+  A similar name of the same type within 30 m triggers "Is it X?" to avoid duplicates.
+
 ### Fix a wrong pin (crowd-sourced map)
 
 Pins start at approximate coordinates. Anyone can tap **📍 Wrong location?** and suggest the right spot by
@@ -86,7 +94,8 @@ both earn **+2**. One suggestion per person per place. `GET /api/places-export` 
 
 1. Faces are blurred **before** the photo is sent to any AI model. If the face detector is unavailable, the upload is refused.
 2. Re-encoding removes EXIF metadata (GPS, device info).
-3. The original photo only lives in memory during the request and is never written to disk. Other students only ever see a copy with faces blurred and people covered, and it is deleted when the place goes stale.
+3. The original photo only lives in memory during the request and is never written to disk. A face-blurred copy
+   (no metadata) is kept in memory for 10 minutes only, so the uploader can fix a wrong place and the AI can re-check it. Other students only ever see a copy with faces blurred and people covered, and it is deleted when the place goes stale.
 4. The model is told never to describe people.
 
 ---
@@ -131,6 +140,8 @@ cloudflared tunnel --url http://localhost:8000
 | GET | `/api/reports/{id}/photo?user_id=` | Blurred, covered photo (uploader, or after unlocking the place) |
 | POST | `/api/upload` | Form: `photo`, `user_id`, `lat`, `lng`, optional `place_id` |
 | POST | `/api/ask` | JSON: `user_id`, `query`, optional `lat`, `lng` (−2) |
+| POST | `/api/places` | Add a new place (JSON `user_id`, `name`, `category`, `lat`, `lng`, optional `note`, `force`) |
+| POST | `/api/reports/{id}/move` | Move your photo to the right place within 10 min (JSON `user_id`, `place_id`) |
 | POST | `/api/places/{id}/fix` | JSON `user_id`, `lat`, `lng`, optional `note`: suggest the right spot |
 | GET | `/api/places-export` | Places with crowd-corrected coordinates |
 | GET | `/api/leaderboard` | Top scouts |

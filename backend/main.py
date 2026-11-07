@@ -5,7 +5,10 @@ Run from the repo root:
 """
 
 import asyncio
+import difflib
 import os
+import re
+import secrets
 import time
 from typing import Optional
 
@@ -63,6 +66,8 @@ def _public_place(place, now=None):
         "room_note": place.get("room_note"),
         "pending_fixes": len(store.fixes.get(place["id"], [])),
         "corrected": bool(place.get("corrected")),
+        "user_created": bool(place.get("user_created")),
+        "verified": not place.get("user_created") or bool(place.get("verified")),
     }
 
 
@@ -254,8 +259,138 @@ def fix_location(place_id: str, body: FixBody):
 def export_places():
     """Current places (with crowd-corrected coordinates) in the same format as places.json,
     so fixes can be saved permanently into the repo."""
-    keys = ("id", "name", "category", "lat", "lng", "description", "room_note")
+    keys = ("id", "name", "category", "lat", "lng", "description", "room_note", "user_created", "verified")
     return [{k: p[k] for k in keys if p.get(k) is not None} for p in store.places.values()]
+
+
+# ---------------------------------------------------------------------------
+# student-added places + moving a report to the right place
+# ---------------------------------------------------------------------------
+def _maybe_verify(place, uploader_id):
+    """A student-added place becomes verified when SOMEONE ELSE's photo there passes the AI check.
+    The creator then earns +2."""
+    if not place.get("user_created") or place.get("verified") or place.get("created_by") == uploader_id:
+        return None
+    place["verified"] = True
+    store.add_credits(place["created_by"], C.NEW_PLACE_REWARD)
+    return f"You also verified this new place, so its creator earned +{C.NEW_PLACE_REWARD}."
+
+
+def _norm(name):
+    return re.sub(r"[^a-z0-9]+", " ", name.lower()).strip()
+
+
+class NewPlace(BaseModel):
+    user_id: str
+    name: str
+    category: str
+    lat: float
+    lng: float
+    note: Optional[str] = None
+    force: bool = False  # add even if a similar place exists nearby
+
+
+@app.post("/api/places")
+def create_place(body: NewPlace):
+    user = _user_or_404(body.user_id)
+    name = " ".join(body.name.split())[:40]
+    if len(name) < 3:
+        raise HTTPException(400, "Give the place a name (at least 3 characters).")
+    if body.category not in C.CATEGORIES:
+        raise HTTPException(400, "Pick a category.")
+    lat_min, lat_max, lng_min, lng_max = C.CAMPUS_BOX
+    if not (lat_min <= body.lat <= lat_max and lng_min <= body.lng <= lng_max):
+        raise HTTPException(400, "That spot is outside the CMU campus area.")
+
+    # duplicate guard: same category, close by, similar name  ->  "did you mean ...?"
+    if not body.force:
+        for p in store.places.values():
+            if p["category"] != body.category:
+                continue
+            if C.distance_m(body.lat, body.lng, p["lat"], p["lng"]) > C.DUPLICATE_RADIUS_M:
+                continue
+            a, b = _norm(name), _norm(p["name"])
+            if a in b or b in a or difflib.SequenceMatcher(None, a, b).ratio() > 0.6:
+                return JSONResponse(status_code=409, content={
+                    "detail": f"Is it {p['name']}? It is already on the map right there.",
+                    "similar": {"id": p["id"], "name": p["name"], "category": p["category"]},
+                })
+
+    slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:24] or "place"
+    place = store.add_place({
+        "id": f"{slug}-{secrets.token_hex(2)}",
+        "name": name,
+        "category": body.category,
+        "lat": round(body.lat, 6),
+        "lng": round(body.lng, 6),
+        "description": "Added by a student.",
+        "room_note": (body.note or "").strip()[:80] or None,
+        "user_created": True,
+        "verified": False,
+        "created_by": user["id"],
+        "created_at": time.time(),
+    })
+    return _public_place(place)
+
+
+class MoveBody(BaseModel):
+    user_id: str
+    place_id: str
+
+
+@app.post("/api/reports/{report_id}/move")
+async def move_report(report_id: str, body: MoveBody):
+    """'Wrong place?': re-analyze the uploader's own photo for the right place.
+    Uses the face-blurred copy kept for 10 minutes. Credits already earned stay the same."""
+    user = _user_or_404(body.user_id)
+    old_place_id, report = store.find_report(report_id)
+    if not report or report.get("user_id") != user["id"]:
+        raise HTTPException(404, "You can only move your own recent photo.")
+    target = store.places.get(body.place_id)
+    if not target:
+        raise HTTPException(404, "Unknown place")
+    if body.place_id == old_place_id:
+        raise HTTPException(400, "The photo is already at this place.")
+    blurred = report.get("_blurred")
+    if blurred is None or time.time() > report.get("_blurred_until", 0):
+        raise HTTPException(410, f"Too late: photos can only be moved within {C.REANALYZE_MINUTES} minutes.")
+
+    try:
+        analysis = await asyncio.to_thread(vision.analyze_photo, blurred, target)
+    except Exception as e:
+        raise HTTPException(502, f"AI check failed: {e}")
+    if not analysis.get("valid"):
+        return {"accepted": False, "credits": user["credits"], "analysis": analysis,
+                "message": f"This photo does not look like {target['name']}: "
+                           f"{analysis.get('reject_reason') or 'wrong kind of place'}. It stays where it was."}
+
+    people, empty = analysis.pop("people", []), analysis.pop("empty_seats", [])
+    try:
+        shared_photo = await asyncio.to_thread(privacy.annotate, blurred, people, empty)
+    except Exception:
+        shared_photo = None
+    analysis["people_covered"] = len(people)
+
+    store.remove_report(old_place_id, report_id)
+    new_report = store.add_report(target["id"], analysis, shared_photo, user["id"])
+    new_report["_blurred"], new_report["_blurred_until"] = blurred, report.get("_blurred_until", 0)
+    store.demand.pop(target["id"], None)
+    verified_msg = _maybe_verify(target, user["id"])
+    now = time.time()
+    msg = f"Moved to {target['name']}."
+    if verified_msg:
+        msg += " " + verified_msg
+    return {
+        "accepted": True, "moved": True, "message": msg,
+        "place": target["name"], "place_id": target["id"],
+        "credits_earned": 0, "credits": user["credits"],
+        "faces_blurred": None, "people_covered": len(people), "photo_stored": False,
+        "summary": analysis.get("summary"), "analysis": analysis,
+        "report": _report_view(target, new_report, now),
+        "photo_url": f"/api/reports/{new_report['id']}/photo" if shared_photo else None,
+        "area": _public_place(target, now),
+        "mock": analysis.get("mock", False),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -337,12 +472,15 @@ async def upload(
         shared_photo = await asyncio.to_thread(privacy.annotate, clean, people, empty)
     except Exception:
         shared_photo = None
-    del clean  # the blurred working copy is gone
+    blurred_copy = clean  # face-blurred, no metadata. Kept max 10 min only for "wrong place?" re-analysis.
+    del clean
 
     # 6. update the place and pay the bounty
     analysis["people_covered"] = len(people)
     report = store.add_report(place["id"], analysis, shared_photo, user["id"])
+    report["_blurred"], report["_blurred_until"] = blurred_copy, time.time() + C.REANALYZE_MINUTES * 60
     store.demand.pop(place["id"], None)
+    verified_msg = _maybe_verify(place, user["id"])
     earned = 0 if on_cooldown else reward
     if earned:
         store.award(user["id"], place["id"], earned)
@@ -351,6 +489,8 @@ async def upload(
         msg = f"Thanks! {place['name']} updated. No credits: you already earned here in the last {C.UPLOAD_COOLDOWN_MIN} min."
     else:
         msg = f"+{earned} credits for {place['name']}! Balance: {user['credits']}."
+    if verified_msg:
+        msg += " " + verified_msg
 
     now = time.time()
     return {
@@ -366,6 +506,7 @@ async def upload(
         "report": _report_view(place, report, now),
         "photo_url": f"/api/reports/{report['id']}/photo" if shared_photo else None,
         "area": _public_place(place, now),
+        "can_move_minutes": C.REANALYZE_MINUTES,
         "summary": analysis.get("summary"),
         "analysis": analysis,  # the full JSON the AI extracted (shown in the UI for testing)
         "mock": analysis.get("mock", False),

@@ -20,7 +20,10 @@ let myPos = null, myDot = null;
 let activeCat = "all";
 let fix = null;        // {placeId, lat, lng, label} while fixing a pin
 let fixMarker = null;  // draggable preview marker
-let pickMode = false;  // waiting for a tap on the map
+let pickCallback = null;  // set while waiting for a tap on the map
+let pickerMode = "select", pickerReport = null;  // "select" before upload, "move" after upload
+let placeChosenByUser = false;
+let addSpot = null;
 
 // ---------- storage (wrapped: may be unavailable) ----------
 const store = {
@@ -36,6 +39,7 @@ async function api(path, opts = {}) {
   if (!res.ok) {
     const err = new Error((data && data.detail) || `Request failed (${res.status})`);
     err.status = res.status;
+    if (data && data.similar) err.similar = data.similar;
     throw err;
   }
   return data;
@@ -167,10 +171,10 @@ function initMap() {
   });
   map.addControl(new Ctl());
   map.on("click", (e) => {
-    if (!pickMode) return;
-    pickMode = false;
-    setFixSpot(e.latlng.lat, e.latlng.lng, "Spot you tapped on the map");
-    $("fix").classList.remove("hidden");
+    if (!pickCallback) return;
+    const cb = pickCallback;
+    pickCallback = null;
+    cb(e.latlng.lat, e.latlng.lng);
   });
 }
 
@@ -202,36 +206,183 @@ function setFixSpot(lat, lng, label) {
 
 function closeFix() {
   $("fix").classList.add("hidden");
-  pickMode = false;
+  pickCallback = null;
   if (fixMarker) { fixMarker.remove(); fixMarker = null; }
   fix = null;
 }
 
-async function searchBuilding(ev) {
-  ev.preventDefault();
-  const q = $("fix-search").value.trim();
+// OpenStreetMap building search, limited to the CMU campus box. Only runs on Enter / button (usage policy).
+async function osmSearch(q, resultsEl, onPick) {
   if (!q) return;
-  $("fix-results").innerHTML = `<div class="text-xs text-stone-500">Searching…</div>`;
-  // OpenStreetMap search, limited to the CMU campus box. Only runs on Enter / button (usage policy).
+  resultsEl.innerHTML = `<div class="text-xs text-stone-500">Searching…</div>`;
   const url = "https://nominatim.openstreetmap.org/search?format=json&limit=6&bounded=1"
     + "&viewbox=-79.9600,40.4530,-79.9300,40.4330&q=" + encodeURIComponent(q);
   try {
     const res = await fetch(url, { headers: { "Accept-Language": "en" } });
     const rows = await res.json();
     if (!rows.length) {
-      $("fix-results").innerHTML = `<div class="text-xs text-stone-500">No building found on campus. Try another name, or tap on the map.</div>`;
+      resultsEl.innerHTML = `<div class="text-xs text-stone-500">No building found on campus. Try another name, or tap on the map.</div>`;
       return;
     }
-    $("fix-results").innerHTML = rows.map((r, i) =>
-      `<button data-i="${i}" class="res w-full text-left rounded-lg border border-stone-200 px-3 py-2 text-sm hover:bg-stone-50">${esc(r.display_name.split(",").slice(0, 2).join(","))}</button>`).join("");
-    document.querySelectorAll(".res").forEach((b) => (b.onclick = () => {
+    resultsEl.innerHTML = rows.map((r, i) =>
+      `<button data-i="${i}" class="w-full text-left rounded-lg border border-stone-200 px-3 py-2 text-sm hover:bg-stone-50">${esc(r.display_name.split(",").slice(0, 2).join(","))}</button>`).join("");
+    resultsEl.querySelectorAll("button").forEach((b) => (b.onclick = () => {
       const r = rows[+b.dataset.i];
-      setFixSpot(+r.lat, +r.lon, r.display_name.split(",")[0]);
-      map.setView([+r.lat, +r.lon], 18);
-      $("fix-results").innerHTML = "";
+      resultsEl.innerHTML = "";
+      onPick(+r.lat, +r.lon, r.display_name.split(",")[0]);
     }));
   } catch {
-    $("fix-results").innerHTML = `<div class="text-xs text-red-700">Search is unavailable right now. Tap on the map instead.</div>`;
+    resultsEl.innerHTML = `<div class="text-xs text-red-700">Search is unavailable right now. Tap on the map instead.</div>`;
+  }
+}
+
+function searchBuilding(ev) {
+  ev.preventDefault();
+  osmSearch($("fix-search").value.trim(), $("fix-results"), (lat, lng, label) => {
+    setFixSpot(lat, lng, label);
+    map.setView([lat, lng], 18);
+  });
+}
+
+function getHere(cb) {
+  if (myPos) return cb(myPos.lat, myPos.lng);
+  if (!navigator.geolocation) return toast("Location is not available on this device", "bad");
+  navigator.geolocation.getCurrentPosition(
+    (pos) => { myPos = { lat: pos.coords.latitude, lng: pos.coords.longitude }; showMe(); cb(myPos.lat, myPos.lng); },
+    () => toast("Allow location access to use this", "bad"), { enableHighAccuracy: true, timeout: 10000 });
+}
+
+// ---------- which place is this photo? (before upload, or "wrong place?" after) ----------
+function placeLabel(p) { return `${CAT_ICON[p.category] || "📍"} ${p.name}${p.user_created && !p.verified ? " 🆕" : ""}`; }
+
+function distTo(p) {
+  if (!myPos) return null;
+  const R = 6371000, toR = Math.PI / 180;
+  const dLat = (p.lat - myPos.lat) * toR, dLng = (p.lng - myPos.lng) * toR;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(myPos.lat * toR) * Math.cos(p.lat * toR) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+function setSnapPlace(id) {
+  const p = places.find((x) => x.id === id);
+  $("snap-place").value = id || "";
+  if (!p) { $("snap-place-name").textContent = "Choose a place"; return; }
+  const d = distTo(p);
+  $("snap-place-name").innerHTML = `${esc(placeLabel(p))}${d != null ? ` <span class="text-xs text-stone-500">· ${Math.round(d)} m</span>` : ""}`;
+}
+
+// Guess the place from GPS, but always show it so the user can correct it BEFORE the AI runs.
+function detectPlace() {
+  if (placeChosenByUser || !places.length) return;
+  if (!myPos) { $("snap-place-name").textContent = "Choose a place (location unavailable)"; return; }
+  const sorted = [...places].sort((a, b) => distTo(a) - distTo(b));
+  const near = sorted.filter((p) => distTo(p) <= 80);
+  setSnapPlace(sorted[0].id);
+  if (near.length > 1) $("snap-place-name").innerHTML += ` <span class="text-xs text-amber-700">· ${near.length} places nearby, check it</span>`;
+}
+
+function openPicker(mode, reportId = null) {
+  pickerMode = mode; pickerReport = reportId;
+  $("picker-title").textContent = mode === "move" ? "Where was this photo really taken?" : "Which place is this?";
+  $("picker-sub").textContent = mode === "move"
+    ? "The AI will re-check the blurred photo for the place you pick. You can move a photo within 10 minutes."
+    : "Closest places first. Not on the map? Add it.";
+  $("picker-search").value = "";
+  showPickerList();
+  $("picker").classList.remove("hidden");
+}
+
+function showPickerList() {
+  $("picker-choose").classList.remove("hidden");
+  $("add-form").classList.add("hidden");
+  renderPickerList();
+}
+
+function renderPickerList() {
+  const q = $("picker-search").value.trim().toLowerCase();
+  let list = places.filter((p) => !q || p.name.toLowerCase().includes(q) || (p.description || "").toLowerCase().includes(q));
+  list.sort((a, b) => (distTo(a) ?? 0) - (distTo(b) ?? 0) || a.name.localeCompare(b.name));
+  $("picker-list").innerHTML = list.slice(0, 40).map((p) => {
+    const d = distTo(p);
+    return `<button data-id="${p.id}" class="pk w-full flex items-center gap-2 text-left rounded-lg border border-stone-200 px-3 py-2 text-sm hover:bg-stone-50">
+      <span class="flex-1">${esc(placeLabel(p))}</span>${d != null ? `<span class="text-xs text-stone-500">${Math.round(d)} m</span>` : ""}</button>`;
+  }).join("") || `<div class="text-sm text-stone-500">No match. Add it as a new place below.</div>`;
+  document.querySelectorAll(".pk").forEach((b) => (b.onclick = () => choosePlace(b.dataset.id)));
+}
+
+async function choosePlace(id) {
+  $("picker").classList.add("hidden");
+  if (pickerMode === "select") {
+    placeChosenByUser = true;
+    setSnapPlace(id);
+    return;
+  }
+  // move an uploaded photo to the right place
+  $("snap-result").innerHTML = `<div class="text-sm text-stone-500">⏳ AI is re-checking the photo for the new place…</div>`;
+  try {
+    const d = await api(`/api/reports/${pickerReport}/move`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: user.id, place_id: id }),
+    });
+    renderUploadResult(d);
+    toast(d.message, d.accepted ? "good" : "bad");
+    loadPlaces();
+  } catch (e) {
+    $("snap-result").innerHTML = "";
+    toast(e.message, "bad");
+  }
+}
+
+function openAddForm() {
+  $("picker-choose").classList.add("hidden");
+  $("add-form").classList.remove("hidden");
+  $("add-name").value = $("picker-search").value.trim();
+  $("add-note").value = "";
+  $("add-error").classList.add("hidden");
+  $("add-search-form").classList.add("hidden");
+  $("add-search-results").innerHTML = "";
+  addSpot = null;
+  $("add-spot").textContent = "No spot chosen yet.";
+  if (myPos) setAddSpot(myPos.lat, myPos.lng, "Your current location");
+  updateAddSubmit();
+}
+
+function setAddSpot(lat, lng, label) {
+  addSpot = { lat, lng };
+  $("add-spot").innerHTML = `<b>${esc(label)}</b><br><span class="text-xs">${lat.toFixed(5)}, ${lng.toFixed(5)}</span>`;
+  updateAddSubmit();
+}
+
+function updateAddSubmit() {
+  $("add-submit").disabled = !(addSpot && $("add-name").value.trim().length >= 3);
+}
+
+async function submitNewPlace(force = false) {
+  $("add-submit").disabled = true;
+  $("add-error").classList.add("hidden");
+  try {
+    const p = await api("/api/places", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: user.id, name: $("add-name").value, category: $("add-cat").value,
+                             lat: addSpot.lat, lng: addSpot.lng, note: $("add-note").value, force }),
+    });
+    await loadPlaces();
+    toast(`${p.name} added to the map 🆕`, "good");
+    choosePlace(p.id);
+  } catch (e) {
+    if (e.status === 409 && e.similar) {
+      $("add-error").innerHTML = `${esc(e.message)}
+        <div class="mt-2 flex gap-2">
+          <button id="dup-use" class="rounded-lg bg-white border border-amber-300 px-3 py-1">Use ${esc(e.similar.name)}</button>
+          <button id="dup-add" class="rounded-lg bg-white border border-amber-300 px-3 py-1">No, add mine</button></div>`;
+      $("add-error").classList.remove("hidden");
+      $("dup-use").onclick = () => choosePlace(e.similar.id);
+      $("dup-add").onclick = () => submitNewPlace(true);
+    } else {
+      $("add-error").textContent = e.message;
+      $("add-error").classList.remove("hidden");
+    }
+    updateAddSubmit();
   }
 }
 
@@ -297,7 +448,7 @@ function applyFilter() {
 function pinHtml(p) {
   const color = p.fresh && p.level ? LEVEL_COLOR[p.level] : "#d6d3d1";
   return `<div style="position:relative">
-    <div class="pin" style="background:${color}">${CAT_ICON[p.category] || "📍"}</div>
+    <div class="pin" style="background:${color};${p.user_created && !p.verified ? "border-style:dashed;border-color:#b91c1c" : ""}">${CAT_ICON[p.category] || "📍"}</div>
     <div class="bounty">🪙${p.bounty}</div></div>`;
 }
 
@@ -310,6 +461,7 @@ function popupHtml(p) {
     <div style="font-weight:700;font-size:14px">${esc(p.name)}</div>
     <div style="margin:2px 0">${status} · <span style="color:#78716c">${freshnessText(p)}</span></div>
     ${p.room_note ? `<div style="font-size:12px">📌 ${esc(p.room_note)}</div>` : ""}
+    ${p.user_created ? `<div style="font-size:12px">${p.verified ? "✅ Added by a student, verified" : "🆕 Added by a student, waiting for a 2nd photo"}</div>` : ""}
     <div style="color:#78716c;font-size:12px">Snap it now for 🪙 ${p.bounty}</div>
     <div id="detail-${p.id}" style="margin-top:6px"></div>
     <button onclick="openPlace('${p.id}')" style="margin-top:6px;width:100%;background:#b91c1c;color:white;border-radius:8px;padding:6px;font-weight:600">
@@ -332,15 +484,9 @@ async function loadPlaces() {
     }
   }
   applyFilter();
-  const sel = $("snap-place");
-  if (sel.options.length <= 1) {
-    for (const cat of Object.keys(CAT_LABEL)) {
-      const group = document.createElement("optgroup");
-      group.label = `${CAT_ICON[cat]} ${CAT_LABEL[cat]}`;
-      places.filter((p) => p.category === cat).forEach((p) => group.appendChild(new Option(p.name, p.id)));
-      if (group.children.length) sel.appendChild(group);
-    }
-  }
+  const sel = $("snap-place"), keep = sel.value;
+  sel.innerHTML = `<option value=""></option>` + places.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join("");
+  sel.value = keep;
 }
 
 function levelBadge(level, extra = "") {
@@ -496,6 +642,7 @@ function step(text, done = false) {
 async function upload() {
   const f = $("snap-file").files[0];
   if (!f) return;
+  if (!$("snap-place").value) { toast("Pick the place first"); return openPicker("select"); }
   $("snap-btn").disabled = true;
   $("snap-steps").innerHTML = "";
   $("snap-result").innerHTML = "";
@@ -503,37 +650,15 @@ async function upload() {
   const fd = new FormData();
   fd.append("photo", f);
   fd.append("user_id", user.id);
-  if ($("snap-place").value) fd.append("place_id", $("snap-place").value);
+  fd.append("place_id", $("snap-place").value);
   if (myPos) { fd.append("lat", myPos.lat); fd.append("lng", myPos.lng); }
 
   const s = [step("Blurring faces and removing photo metadata"), step("AI is checking the photo"), step("Updating the map")];
   try {
     const d = await api("/api/upload", { method: "POST", body: fd });
-    if (d.needs_choice) {  // several places nearby: let the user pick, keep the same photo
-      $("snap-steps").innerHTML = "";
-      $("snap-result").innerHTML = `<div class="fade-in rounded-xl p-3 bg-amber-50 text-amber-900">
-        <div class="font-semibold">Which place is this?</div>
-        <div class="mt-2 flex flex-wrap gap-2">${d.options.map((o) =>
-          `<button class="pick rounded-full bg-white border border-amber-300 px-3 py-1 text-sm" data-id="${o.id}">${CAT_ICON[o.category] || ""} ${esc(o.name)}</button>`).join("")}</div></div>`;
-      document.querySelectorAll(".pick").forEach((b) => (b.onclick = () => { $("snap-place").value = b.dataset.id; upload(); }));
-      $("snap-btn").disabled = false;
-      return;
-    }
     s.forEach((el) => (el.firstChild.textContent = "✅"));
     step(d.accepted ? "Original deleted. Only the blurred, covered version is kept (until it goes stale)." : "Photo deleted.", true);
-    setBalance(d.credits);
-    $("snap-result").innerHTML = `<div class="fade-in rounded-xl p-3 ${d.accepted ? "bg-green-50 text-green-900" : "bg-red-50 text-red-900"}">
-      <div class="font-semibold">${esc(d.message)}</div>
-      ${d.summary ? `<div class="text-sm mt-1">AI saw: ${esc(d.summary)}</div>` : ""}
-      ${d.mock ? `<div class="text-xs mt-1 opacity-70">Mock AI mode (no OPENROUTER_KEY).</div>` : ""}
-      ${d.accepted && d.report ? `<div class="mt-2 flex flex-wrap items-center gap-2 text-sm"><span>This photo:</span>${levelBadge(d.report.level)}<span>${esc(seatsText(d.report))}</span></div>` : ""}
-      ${d.accepted && d.area ? `<div class="mt-1 flex flex-wrap items-center gap-2 text-sm"><span>Whole area now:</span>${levelBadge(d.area.level)}<span class="text-xs opacity-70">from ${d.area.n_reports} photo${d.area.n_reports > 1 ? "s" : ""}</span></div>` : ""}
-      ${d.photo_url ? `<img src="${d.photo_url}?user_id=${encodeURIComponent(user.id)}" class="mt-2 w-full rounded-lg" alt="what other students will see" />
-        <div class="text-xs mt-1 opacity-70">What other students see: ${d.faces_blurred} face(s) blurred, ${d.people_covered} person(s) covered, green = free seat.</div>` : ""}
-      ${d.accepted && d.analysis ? `<div class="mt-2 bg-white/70 rounded-lg p-2">${stateHtml(d.analysis)}</div>` : ""}
-      ${d.analysis ? `<details class="mt-2 text-xs"><summary class="cursor-pointer opacity-70">Raw AI output (for testing)</summary>
-        <pre class="mt-1 whitespace-pre-wrap break-all bg-white/70 rounded p-2">${esc(JSON.stringify(d.analysis, null, 2))}</pre></details>` : ""}
-    </div>`;
+    renderUploadResult(d);
     if (d.accepted) toast(d.message, "good");
     $("snap-file").value = ""; $("snap-preview").classList.add("hidden"); $("snap-filename").textContent = "";
     loadPlaces(); loadLeaderboard(); refreshUser();
@@ -542,6 +667,24 @@ async function upload() {
     toast(e.message, "bad");
     $("snap-btn").disabled = false;
   }
+}
+
+function renderUploadResult(d) {
+  setBalance(d.credits);
+  $("snap-result").innerHTML = `<div class="fade-in rounded-xl p-3 ${d.accepted ? "bg-green-50 text-green-900" : "bg-red-50 text-red-900"}">
+    <div class="font-semibold">${esc(d.message)}</div>
+    ${d.summary ? `<div class="text-sm mt-1">AI saw: ${esc(d.summary)}</div>` : ""}
+    ${d.mock ? `<div class="text-xs mt-1 opacity-70">Mock AI mode (no OPENROUTER_KEY).</div>` : ""}
+    ${d.accepted && d.report ? `<div class="mt-2 flex flex-wrap items-center gap-2 text-sm"><span>This photo:</span>${levelBadge(d.report.level)}<span>${esc(seatsText(d.report))}</span></div>` : ""}
+    ${d.accepted && d.area ? `<div class="mt-1 flex flex-wrap items-center gap-2 text-sm"><span>Whole area now:</span>${levelBadge(d.area.level)}<span class="text-xs opacity-70">from ${d.area.n_reports} photo${d.area.n_reports > 1 ? "s" : ""}</span></div>` : ""}
+    ${d.accepted && d.report ? `<button id="wrong-place" class="mt-2 w-full rounded-lg bg-white border border-green-300 py-2 text-sm font-semibold">📍 Wrong place? Move this photo (within 10 min)</button>` : ""}
+    ${d.photo_url ? `<img src="${d.photo_url}?user_id=${encodeURIComponent(user.id)}" class="mt-2 w-full rounded-lg" alt="what other students will see" />
+      <div class="text-xs mt-1 opacity-70">What other students see: ${d.faces_blurred != null ? `${d.faces_blurred} face(s) blurred, ` : ""}${d.people_covered} person(s) covered, green = free seat.</div>` : ""}
+    ${d.accepted && d.analysis ? `<div class="mt-2 bg-white/70 rounded-lg p-2">${stateHtml(d.analysis)}</div>` : ""}
+    ${d.analysis ? `<details class="mt-2 text-xs"><summary class="cursor-pointer opacity-70">Raw AI output (for testing)</summary>
+      <pre class="mt-1 whitespace-pre-wrap break-all bg-white/70 rounded p-2">${esc(JSON.stringify(d.analysis, null, 2))}</pre></details>` : ""}
+  </div>`;
+  if ($("wrong-place")) $("wrong-place").onclick = () => openPicker("move", d.report.id);
 }
 
 async function loadLeaderboard() {
@@ -580,7 +723,7 @@ function locate() {
   );
   // keep the blue dot following the user
   navigator.geolocation.watchPosition(
-    (pos) => { myPos = { lat: pos.coords.latitude, lng: pos.coords.longitude }; showMe(); },
+    (pos) => { myPos = { lat: pos.coords.latitude, lng: pos.coords.longitude }; showMe(); detectPlace(); },
     () => {}, { enableHighAccuracy: true, maximumAge: 15000 }
   );
 }
@@ -593,13 +736,26 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("fix-search-form").onsubmit = searchBuilding;
   $("fix-cancel").onclick = closeFix;
   $("fix-submit").onclick = submitFix;
-  $("fix-tap").onclick = () => { pickMode = true; $("fix").classList.add("hidden"); showTab("map"); toast("Tap the correct spot on the map"); };
-  $("fix-here").onclick = () => {
-    if (myPos) return setFixSpot(myPos.lat, myPos.lng, "Your current location");
-    navigator.geolocation?.getCurrentPosition(
-      (pos) => { myPos = { lat: pos.coords.latitude, lng: pos.coords.longitude }; setFixSpot(myPos.lat, myPos.lng, "Your current location"); },
-      () => toast("Allow location access to use this", "bad"), { enableHighAccuracy: true, timeout: 10000 });
+  $("fix-tap").onclick = () => {
+    $("fix").classList.add("hidden"); showTab("map"); toast("Tap the correct spot on the map");
+    pickCallback = (lat, lng) => { setFixSpot(lat, lng, "Spot you tapped on the map"); $("fix").classList.remove("hidden"); };
   };
+  $("fix-here").onclick = () => getHere((lat, lng) => setFixSpot(lat, lng, "Your current location"));
+  // place picker + add new place
+  $("snap-place-change").onclick = () => openPicker("select");
+  $("picker-search").oninput = renderPickerList;
+  $("picker-add").onclick = openAddForm;
+  $("add-back").onclick = showPickerList;
+  $("picker-close").onclick = () => { $("picker").classList.add("hidden"); pickCallback = null; };
+  $("add-name").oninput = updateAddSubmit;
+  $("add-here").onclick = () => getHere((lat, lng) => setAddSpot(lat, lng, "Your current location"));
+  $("add-search-toggle").onclick = () => $("add-search-form").classList.toggle("hidden");
+  $("add-search-form").onsubmit = (ev) => { ev.preventDefault(); osmSearch($("add-search").value.trim(), $("add-search-results"), setAddSpot); };
+  $("add-tap").onclick = () => {
+    $("picker").classList.add("hidden"); showTab("map"); toast("Tap where the new place is");
+    pickCallback = (lat, lng) => { setAddSpot(lat, lng, "Spot you tapped on the map"); showTab("snap"); $("picker").classList.remove("hidden"); };
+  };
+  $("add-submit").onclick = () => submitNewPlace(false);
   $("ask-btn").onclick = ask;
   $("snap-file").onchange = onFile;
   $("snap-btn").onclick = upload;
@@ -611,5 +767,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   loadStatus();
   await ensureUser();
   await loadPlaces();
+  detectPlace();
   setInterval(loadPlaces, 15000);  // live updates
 });

@@ -82,9 +82,11 @@
         </p>
 
         <label class="block mt-4 text-sm font-medium">Place</label>
-        <select id="snap-place" class="mt-1 w-full rounded-xl border border-stone-300 p-2.5 bg-white">
-          <option value="">Auto-detect from my location</option>
-        </select>
+        <div class="mt-1 flex items-center gap-2 rounded-xl border border-stone-300 p-2.5 bg-white">
+          <span id="snap-place-name" class="flex-1 text-sm">Finding where you are…</span>
+          <button id="snap-place-change" class="text-sm font-semibold text-red-700 shrink-0">Change</button>
+        </div>
+        <select id="snap-place" class="hidden"><option value=""></option></select>
 
         <label for="snap-file" class="mt-4 flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-stone-300 p-8 cursor-pointer hover:bg-stone-50">
           <span class="text-4xl">📸</span>
@@ -149,6 +151,61 @@
     <div class="w-full max-w-lg max-h-[88vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl bg-white p-5 fade-in">
       <div id="sheet-body"></div>
       <button id="sheet-close" class="mt-4 w-full rounded-xl bg-stone-900 py-2.5 text-white font-semibold">Close</button>
+    </div>
+  </div>
+
+  <!-- place picker: choose an existing place or add a new one -->
+  <div id="picker" class="hidden fixed inset-0 z-[2200] bg-black/40 flex items-end sm:items-center justify-center">
+    <div class="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl bg-white p-5 fade-in">
+      <div id="picker-title" class="font-bold text-lg">Which place is this?</div>
+      <div id="picker-sub" class="text-xs text-stone-500"></div>
+
+      <div id="picker-choose">
+        <input id="picker-search" placeholder="Search places on the map" autocapitalize="none"
+          class="mt-3 w-full rounded-xl border border-stone-300 p-2.5 focus:outline-none focus:ring-2 focus:ring-red-700" />
+        <div id="picker-list" class="mt-2 max-h-72 overflow-y-auto space-y-1"></div>
+        <button id="picker-add" class="mt-3 w-full rounded-xl border-2 border-dashed border-red-300 py-2.5 text-sm font-semibold text-red-700">➕ Not on the map? Add a new place</button>
+      </div>
+
+      <div id="add-form" class="hidden mt-3 space-y-3">
+        <div>
+          <label class="text-sm font-semibold">Name</label>
+          <input id="add-name" maxlength="40" placeholder="e.g. Tepper Quad 3808"
+            class="mt-1 w-full rounded-xl border border-stone-300 p-2.5 focus:outline-none focus:ring-2 focus:ring-red-700" />
+        </div>
+        <div>
+          <label class="text-sm font-semibold">Category</label>
+          <select id="add-cat" class="mt-1 w-full rounded-xl border border-stone-300 p-2.5 bg-white">
+            <option value="study">📚 Study</option><option value="dining">🍜 Dining</option>
+            <option value="lounge">🛋️ Dorm lounge</option><option value="laundry">🧺 Laundry</option><option value="gym">🏋️ Gym</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-sm font-semibold">Where is it?</label>
+          <div class="mt-1 grid grid-cols-3 gap-2">
+            <button id="add-here" class="rounded-xl border border-stone-300 py-2 text-xs font-semibold">📍 I'm here</button>
+            <button id="add-tap" class="rounded-xl border border-stone-300 py-2 text-xs font-semibold">👆 Tap map</button>
+            <button id="add-search-toggle" class="rounded-xl border border-stone-300 py-2 text-xs font-semibold">🔍 Search</button>
+          </div>
+          <form id="add-search-form" class="hidden mt-2 flex gap-2">
+            <input id="add-search" placeholder="Building name" autocapitalize="none" class="flex-1 rounded-xl border border-stone-300 p-2.5" />
+            <button class="rounded-xl bg-stone-900 px-4 text-white text-sm font-semibold">Search</button>
+          </form>
+          <div id="add-search-results" class="mt-2 space-y-1"></div>
+          <div id="add-spot" class="mt-2 text-sm rounded-xl bg-stone-50 p-3 text-stone-500">No spot chosen yet.</div>
+        </div>
+        <div>
+          <label class="text-sm font-semibold">Floor / room (optional)</label>
+          <input id="add-note" maxlength="80" placeholder="e.g. 3F, room 3808"
+            class="mt-1 w-full rounded-xl border border-stone-300 p-2.5 focus:outline-none focus:ring-2 focus:ring-red-700" />
+        </div>
+        <div id="add-error" class="hidden text-sm rounded-xl bg-amber-50 text-amber-900 p-3"></div>
+        <div class="text-xs text-stone-500">New places show 🆕 until someone else's photo there passes the AI check. Then you earn 🪙2.</div>
+        <button id="add-submit" class="w-full rounded-xl bg-red-700 py-2.5 text-white font-semibold disabled:opacity-50" disabled>Add place</button>
+        <button id="add-back" class="w-full text-sm text-stone-600 underline">Back to the list</button>
+      </div>
+
+      <button id="picker-close" class="mt-4 w-full rounded-xl bg-stone-900 py-2.5 text-white font-semibold">Cancel</button>
     </div>
   </div>
 
