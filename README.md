@@ -4,6 +4,7 @@
    - Jessica Fang (@Jffffffy)
    - Helen Zhou (@helennnzmay)
    - Zoe Yu (@yuzoe29)
+   - Kelly Zhang (@zhangkelly1206)
 
 **Tell Scout what you need. It tells you where to go right now.**
 
