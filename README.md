@@ -1,4 +1,4 @@
-# 📍 Spotty@CMU: the Waze for campus spaces
+# 🧭 Scout: the Waze for campus spaces
 
  ## Team
    - Jessica Fang (@Jffffffy)
@@ -10,9 +10,9 @@
 
 Open it on your phone, sign up, and snap a place. (Free server: if nobody used it for 15 minutes, the first visit takes about 50 seconds to wake up.)
 
-**Tell Spotty what you need. It tells you where to go right now.**
+**Tell Scout what you need. It tells you where to go right now.**
 
-Students waste time walking to a full library floor, a long lunch line, or a laundry room with no free machine. Spotty turns quick student photos into live, structured information about campus spaces, and pays people in credits for keeping it fresh.
+Students waste time walking to a full library floor, a long lunch line, or a laundry room with no free machine. Scout turns quick student photos into live, structured information about campus spaces, and pays people in credits for keeping it fresh.
 
 > *Information is the currency. Stale places pay more.*
 
@@ -42,9 +42,9 @@ Another student asks: "quiet spot with an outlet near Tepper"
 | Photo of a **stale** place | +3 |
 | Photo of a stale place **someone just asked about** | +5 |
 | See full details of a place | −1 |
-| Ask Spotty | −2 |
+| Ask Scout | −2 |
 
-Bounties are how new credits enter the system: the less fresh a place is, and the more people want it, the more a photo pays. This stops free riders and sends spotters where information is missing.
+Bounties are how new credits enter the system: the less fresh a place is, and the more people want it, the more a photo pays. This stops free riders and sends scouts where information is missing.
 
 ### Busy levels (not busy / moderate / busy)
 
@@ -133,7 +133,7 @@ Phone one-tap uploads: see [`shortcut/SHORTCUT.md`](shortcut/SHORTCUT.md).
 | POST | `/api/reports/{id}/move` | Move your photo to the right place within 10 min (JSON `user_id`, `place_id`) |
 | POST | `/api/places/{id}/fix` | JSON `user_id`, `lat`, `lng`, optional `note`: suggest the right spot |
 | GET | `/api/places-export` | Places with crowd-corrected coordinates |
-| GET | `/api/leaderboard` | Top spotters |
+| GET | `/api/leaderboard` | Top scouts |
 | GET | `/api/status` | Demo / mock flags and all rules |
 
 ## Project layout
@@ -142,7 +142,7 @@ Phone one-tap uploads: see [`shortcut/SHORTCUT.md`](shortcut/SHORTCUT.md).
 backend/
   main.py       FastAPI app and endpoints
   privacy.py    face blur + metadata strip (runs before any AI call)
-  vision.py     OpenRouter calls: photo analysis and Ask Spotty
+  vision.py     OpenRouter calls: photo analysis and Ask Scout
   credits.py    freshness, bounty pricing, GPS distance
   store.py      in-memory store (no photos, ever)
   places.json   39 CMU places: all dining areas (official list), study areas, dorm lounges (coordinates approximate)

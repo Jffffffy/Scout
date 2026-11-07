@@ -117,7 +117,7 @@ def analyze_photo(jpeg_bytes: bytes, place: Dict[str, Any]) -> Dict[str, Any]:
 
     fields = CATEGORY_FIELDS.get(place["category"], {})
     field_lines = "\n".join(f'  "{k}": {v}' for k, v in fields.items())
-    prompt = f"""You verify crowd-sourced photos for Spotty@CMU, a campus app that shows students
+    prompt = f"""You verify crowd-sourced photos for Scout, a campus app that shows students
 which spaces are free right now. The uploader claims this photo was just taken at:
 
 Place: {place['name']}
@@ -209,14 +209,14 @@ def _mock_analysis(place: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# 2. Ask Spotty
+# 2. Ask Scout
 # ---------------------------------------------------------------------------
 def ask_scout(query: str, candidates: List[Dict[str, Any]]) -> Dict[str, Any]:
     """candidates: [{id, name, category, description, walk_minutes, fresh, minutes_old, state}]"""
     if mock_mode():
         return _mock_ask(query, candidates)
 
-    prompt = f"""You are Spotty, a campus space finder at Carnegie Mellon.
+    prompt = f"""You are Scout, a campus space finder at Carnegie Mellon.
 A student asks: "{query}"
 
 Live data for each place. "level" is not_busy / moderate / busy, computed from all fresh photos

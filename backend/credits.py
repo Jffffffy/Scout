@@ -5,7 +5,7 @@ Rules
 - Uploading earns a bounty. Stale places pay more, and stale places that
   someone recently asked about pay the most. This is how new credits enter
   the system, so the economy never runs dry.
-- Viewing details costs 1 credit, asking Spotty costs 2.
+- Viewing details costs 1 credit, asking Scout costs 2.
 """
 
 import math

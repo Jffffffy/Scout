@@ -1,4 +1,4 @@
-"""Spotty@CMU: the Waze for campus spaces.
+"""Scout: the Waze for campus spaces.
 
 Run from the repo root:
     uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
@@ -27,7 +27,7 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 DEMO_MODE = os.getenv("DEMO_MODE", "true").lower() == "true"
 MAX_UPLOAD_BYTES = 12 * 1024 * 1024
 
-app = FastAPI(title="Spotty@CMU")
+app = FastAPI(title="Scout")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")
@@ -564,7 +564,7 @@ def ask(body: AskBody):
     except Exception as e:
         with store.lock:
             user["credits"] += C.COST_ASK  # refund on AI failure
-        raise HTTPException(502, f"Spotty could not answer: {e}")
+        raise HTTPException(502, f"Scout could not answer: {e}")
 
     by_id = {c["id"]: c for c in candidates}
     recs = []

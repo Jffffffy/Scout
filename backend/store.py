@@ -1,6 +1,6 @@
 """In-memory data store.
 
-Spotty never stores photos. The only things kept are:
+Scout never stores photos. The only things kept are:
 - the structured state the AI extracted for each place
 - user credit balances and upload counts
 - small timestamps used for anti-abuse and bounty pricing
