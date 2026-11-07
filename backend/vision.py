@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-VISION_MODEL = os.getenv("VISION_MODEL", "google/gemini-4-argon")
+VISION_MODEL = os.getenv("VISION_MODEL", "google/gemini-omni-1.2-flash")
 ASK_MODEL = os.getenv("ASK_MODEL", VISION_MODEL)
 # Used automatically if the main model errors, times out or returns nothing.
 FALLBACK_MODEL = os.getenv("FALLBACK_MODEL", "google/gemini-2.5-flash")

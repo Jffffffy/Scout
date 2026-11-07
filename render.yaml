@@ -13,9 +13,9 @@ services:
       - key: OPENROUTER_KEY
         sync: false        # paste it in the Render dashboard, never in git
       - key: VISION_MODEL
-        value: google/gemini-4-argon      # smartest: Google's flagship multimodal reasoning model
+        value: google/gemini-omni-1.2-flash   # fast, newest Gemini flash tier
       - key: ASK_MODEL
-        value: google/gemini-4-argon
+        value: google/gemini-omni-1.2-flash
       - key: FALLBACK_MODEL
         value: google/gemini-2.5-flash    # fast backup if the main model fails or times out
       - key: DEMO_MODE
