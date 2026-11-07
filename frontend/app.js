@@ -109,6 +109,10 @@ function logout() {
 }
 
 function openAccount() {
+  if (!user) {  // not signed in yet: show the sign-in box instead
+    $("auth").classList.remove("hidden");
+    return;
+  }
   $("modal-body").innerHTML = `
     <div class="flex justify-between"><span class="text-stone-500">Name</span><b>${esc(user.name)}</b></div>
     <div class="flex justify-between"><span class="text-stone-500">Credits</span><b>🪙 ${user.credits}</b></div>

@@ -26,14 +26,15 @@ Open `SCOUT_URL` on the phone, sign up or log in, tap the 🪙 balance in the to
 | # | Action | Settings |
 |---|---|---|
 | 1 | **Take Photo** | Show Camera Preview: on |
-| 2 | **Get Current Location** | |
-| 3 | **Get Contents of URL** | URL: `SCOUT_URL/api/upload` · Method: **POST** · Request Body: **Form** |
-| | Form field `photo` | type **File** ⟹ *Photo* (from step 1) |
+| 2 | **Convert Image** | Convert *Photo* to **JPEG** · Preserve Metadata: **off** (iPhones shoot HEIC, which the server cannot read) |
+| 3 | **Get Current Location** | |
+| 4 | **Get Contents of URL** | URL: `SCOUT_URL/api/upload` · Method: **POST** · Request Body: **Form** |
+| | Form field `photo` | type **File** ⟹ *Converted Image* (from step 2) |
 | | Form field `user_id` | type **Text** ⟹ your private Shortcut key |
 | | Form field `lat` | type **Text** ⟹ *Current Location* ⟹ **Latitude** |
 | | Form field `lng` | type **Text** ⟹ *Current Location* ⟹ **Longitude** |
-| 4 | **Get Dictionary Value** | Key: `message` from *Contents of URL* |
-| 5 | **Show Notification** | *Dictionary Value* |
+| 5 | **Get Dictionary Value** | Key: `message` from *Contents of URL* |
+| 6 | **Show Notification** | *Dictionary Value* |
 
 Name it **Scout Snap**.
 

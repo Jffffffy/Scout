@@ -4,6 +4,7 @@ Run from the repo root:
     uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 """
 
+import asyncio
 import os
 import time
 from typing import Optional
@@ -158,11 +159,11 @@ async def upload(
         place = store.places[place_id]
     if lat is not None and lng is not None:
         nearest = min(store.places.values(), key=lambda p: C.distance_m(lat, lng, p["lat"], p["lng"]))
-        dist = C.distance_m(lat, lng, nearest["lat"], nearest["lng"])
         if place is None:
             place = nearest
-        if not DEMO_MODE and C.distance_m(lat, lng, place["lat"], place["lng"]) > C.GPS_RADIUS_M:
-            return _reject(user, f"You are {round(dist)} m from the nearest Scout place. "
+        dist = C.distance_m(lat, lng, place["lat"], place["lng"])  # distance to the place actually used
+        if not DEMO_MODE and dist > C.GPS_RADIUS_M:
+            return _reject(user, f"You are {round(dist)} m from {place['name']}. "
                                  f"Photos must be taken within {C.GPS_RADIUS_M} m.")
     elif not DEMO_MODE:
         return _reject(user, "Location is required so we know the photo is real.")
@@ -178,7 +179,8 @@ async def upload(
 
     # 3. privacy: blur faces + strip EXIF BEFORE the photo goes to any AI model
     try:
-        clean, faces = privacy.blur_faces(raw)
+        # run in a worker thread so other users are not blocked while we process
+        clean, faces = await asyncio.to_thread(privacy.blur_faces, raw)
     except privacy.PrivacyError as e:
         del raw
         return _reject(user, str(e))
@@ -186,7 +188,7 @@ async def upload(
 
     # 4. AI: is it valid, and what is the state?
     try:
-        analysis = vision.analyze_photo(clean, place)
+        analysis = await asyncio.to_thread(vision.analyze_photo, clean, place)
     except Exception as e:  # network / model error
         del clean
         raise HTTPException(502, f"AI check failed: {e}")

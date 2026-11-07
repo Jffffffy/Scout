@@ -77,17 +77,24 @@ def _call(model: str, messages: List[Dict[str, Any]], max_tokens: int, timeout: 
     return content
 
 
-def _post(model: str, messages: List[Dict[str, Any]], max_tokens: int = 4000) -> Tuple[str, str]:
-    """Try the main (smartest) model first; fall back to a fast model if it fails.
-    Returns (reply text, model actually used). Reasoning models spend tokens on thinking,
-    so max_tokens is generous."""
+def _post_json(model: str, messages: List[Dict[str, Any]], max_tokens: int = 4000) -> Tuple[Dict[str, Any], str]:
+    """Ask the main model for JSON. If the call fails, times out, returns nothing,
+    or returns text that is not valid JSON, retry once with the fallback model.
+    Returns (parsed JSON, model actually used)."""
     try:
-        return _call(model, messages, max_tokens, timeout=45), model
+        return _parse_json(_call(model, messages, max_tokens, timeout=45)), model
     except Exception as e:
         if not FALLBACK_MODEL or FALLBACK_MODEL == model:
             raise
         print(f"[vision] {model} failed ({e}); falling back to {FALLBACK_MODEL}")
-        return _call(FALLBACK_MODEL, messages, max_tokens, timeout=40), FALLBACK_MODEL
+        return _parse_json(_call(FALLBACK_MODEL, messages, max_tokens, timeout=40)), FALLBACK_MODEL
+
+
+def _as_bool(value: Any) -> bool:
+    """Strict: only real true or the string "true" count. "false", "no", null, etc. are False."""
+    if isinstance(value, bool):
+        return value
+    return isinstance(value, str) and value.strip().lower() == "true"
 
 
 def _parse_json(text: str) -> Dict[str, Any]:
@@ -140,10 +147,9 @@ Never describe what any person looks like."""
             {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}},
         ],
     }]
-    reply, used = _post(VISION_MODEL, messages)
-    result = _parse_json(reply)
+    result, used = _post_json(VISION_MODEL, messages)
     result["model"] = used
-    result["valid"] = bool(result.get("valid"))
+    result["valid"] = _as_bool(result.get("valid"))
     if result.get("availability") not in ("high", "medium", "low"):
         result["availability"] = "medium"
     return result
@@ -198,8 +204,7 @@ Reply with ONE JSON object and nothing else:
   "recommendations": [{{"place_id": string, "reason": string (max 25 words, cite the live data)}}],
   "note": string or null   // e.g. what info is missing
 }}"""
-    reply, used = _post(ASK_MODEL, [{"role": "user", "content": prompt}])
-    result = _parse_json(reply)
+    result, used = _post_json(ASK_MODEL, [{"role": "user", "content": prompt}])
     valid_ids = {c["id"] for c in candidates}
     recs = [r for r in result.get("recommendations", []) if r.get("place_id") in valid_ids][:3]
     return {"recommendations": recs, "note": result.get("note"), "model": used}
