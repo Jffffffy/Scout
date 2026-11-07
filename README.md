@@ -6,6 +6,10 @@
    - Zoe Yu (@yuzoe29)
    - Kelly Zhang (@zhangkelly1206)
 
+## 🔗 Try it: https://scout-17ly.onrender.com
+
+Open it on your phone, sign up, and snap a place. (Free server: if nobody used it for 15 minutes, the first visit takes about 50 seconds to wake up.)
+
 **Tell Scout what you need. It tells you where to go right now.**
 
 Students waste time walking to a full library floor, a long lunch line, or a laundry room with no free machine. Scout turns quick student photos into live, structured information about campus spaces, and pays people in credits for keeping it fresh.
@@ -106,34 +110,13 @@ both earn **+2**. One suggestion per person per place. `GET /api/places-export` 
 
 ---
 
-## Run it
+## Hosting
 
-Requires Python 3.10+.
+Live at **https://scout-17ly.onrender.com**, deployed on Render from this repo (config in `render.yaml`).
+Every push to `main` redeploys automatically. The OpenRouter key lives only in Render's environment settings,
+never in the code. Data is kept in memory, so it resets on each redeploy.
 
-```bash
-git clone https://github.com/Jffffffy/nova_2026_scout.git
-cd nova_2026_scout
-python -m venv .venv && source .venv/bin/activate
-pip install -r backend/requirements.txt
-cp .env.example .env          # then paste your OpenRouter key into .env
-uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-Open http://localhost:8000.
-
-No key? It still runs in **mock AI mode**, so you can click through every feature.
-
-Phone uploads: see [`shortcut/SHORTCUT.md`](shortcut/SHORTCUT.md).
-
-## Deploy (public HTTPS link)
-
-**Render (stable link, laptop can be off):** New + ⟹ Blueprint ⟹ pick this repo ⟹ it reads `render.yaml` ⟹ paste `OPENROUTER_KEY` when asked ⟹ Deploy. You get `https://scout-xxxx.onrender.com`.
-Free instances sleep after ~15 min idle (first visit then takes ~50 s) and memory resets on restart.
-
-**Quick tunnel (2 minutes, laptop must stay on):**
-```bash
-cloudflared tunnel --url http://localhost:8000
-```
+Phone one-tap uploads: see [`shortcut/SHORTCUT.md`](shortcut/SHORTCUT.md).
 
 ## API
 

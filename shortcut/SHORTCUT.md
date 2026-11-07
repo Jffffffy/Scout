@@ -2,20 +2,9 @@
 
 The Shortcut takes a photo, adds your location, uploads it to Scout and shows how many credits you earned.
 
-## 0. Get the public link
+## 0. The link
 
-If the app is deployed on Render, `SCOUT_URL` is your `https://....onrender.com` link. Skip to step 1.
-
-Otherwise your phone cannot reach `localhost` on a laptop. Expose the server with a tunnel:
-
-```bash
-# option A: cloudflared (no account needed)
-cloudflared tunnel --url http://localhost:8000
-# option B: ngrok
-ngrok http 8000
-```
-
-Copy the `https://....` URL it prints. Below we call it `SCOUT_URL`.
+`SCOUT_URL` = **https://scout-17ly.onrender.com**
 
 ## 1. Get your user ID
 
