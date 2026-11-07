@@ -36,13 +36,36 @@ Another student asks: "quiet spot with an outlet near Tepper"
 
 Bounties are how new credits enter the system: the less fresh a place is, and the more people want it, the more a photo pays. This stops free riders and sends scouts where information is missing.
 
+### Busy levels (not busy / moderate / busy)
+
+The AI counts seats in each photo: `total_seats` and `occupied_seats` (a person or belongings on it).
+All fresh photos of one area are **added before dividing**:
+
+```
+photo 1: 8/10 taken, photo 2: 2/10 taken  ->  (8+2)/(10+10) = 50%  ->  moderate
+```
+
+| Occupancy | Level |
+|---|---|
+| < 40% | not busy |
+| 40–70% | moderate |
+| > 70% | busy |
+
+Dining also uses the line: ≤ 3 people not busy, ≤ 10 moderate, more is busy.
+
+### Photos other students can see
+
+Original photo ⟹ faces blurred ⟹ AI finds every person and every empty seat ⟹ each person is covered by a
+gray block (whole body) and each free seat is outlined in green. Only this covered copy is kept, and only until
+the place goes stale (max 30 min). Viewing an area's summary and photos costs 1 credit (free again for 30 min).
+
 ### Freshness
 
 | Place type | Goes stale after |
 |---|---|
 | Dining | 10 min |
 | Gym, office hours | 15 min |
-| Study spaces | 30 min |
+| Study spaces, dorm lounges | 30 min |
 | Laundry | when the next running machine should finish (max 30 min) |
 
 ### Anti-abuse
@@ -55,7 +78,7 @@ Bounties are how new credits enter the system: the less fresh a place is, and th
 
 1. Faces are blurred **before** the photo is sent to any AI model. If the face detector is unavailable, the upload is refused.
 2. Re-encoding removes EXIF metadata (GPS, device info).
-3. The photo only lives in memory during the request and is never written to disk. Only the extracted JSON is kept.
+3. The original photo only lives in memory during the request and is never written to disk. Other students only ever see a copy with faces blurred and people covered, and it is deleted when the place goes stale.
 4. The model is told never to describe people.
 
 ---
@@ -96,7 +119,8 @@ cloudflared tunnel --url http://localhost:8000
 | POST | `/api/signup` | JSON `username`, `password` ⟹ account (+5 credits) |
 | POST | `/api/login` | JSON `username`, `password` ⟹ account |
 | GET | `/api/places` | Map data: color, freshness, bounty (free) |
-| GET | `/api/places/{id}?user_id=` | Full AI-extracted state (−1) |
+| GET | `/api/places/{id}?user_id=` | Area summary + list of fresh photos (−1, free again for 30 min) |
+| GET | `/api/reports/{id}/photo?user_id=` | Blurred, covered photo (uploader, or after unlocking the place) |
 | POST | `/api/upload` | Form: `photo`, `user_id`, `lat`, `lng`, optional `place_id` |
 | POST | `/api/ask` | JSON: `user_id`, `query`, optional `lat`, `lng` (−2) |
 | GET | `/api/leaderboard` | Top scouts |
@@ -111,7 +135,7 @@ backend/
   vision.py     OpenRouter calls: photo analysis and Ask Scout
   credits.py    freshness, bounty pricing, GPS distance
   store.py      in-memory store (no photos, ever)
-  places.json   seed places on CMU campus (coordinates approximate)
+  places.json   39 CMU places: all dining areas (official list), study areas, dorm lounges (coordinates approximate)
 frontend/       single page, no build step (Tailwind + Leaflet via CDN)
 shortcut/       how to build the one-tap iPhone Shortcut
 ```
@@ -123,7 +147,7 @@ FastAPI · OpenCV · OpenRouter (Gemini Omni 1.2 Flash by default with automatic
 ## What is mocked / next steps
 
 - Data lives in memory and resets on restart. Next: a database.
-- Six seed places with approximate coordinates. Next: every building and room.
+- 39 places with approximate coordinates. A few photos stand in for a whole area. Next: more photos per area and floor plans.
 - Username + password accounts (salted PBKDF2 hashes). Next: CMU SSO so credits cannot be farmed with many accounts.
 - Next: predictions ("Hunt is usually free after 8 pm") from the history of reports.
 

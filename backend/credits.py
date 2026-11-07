@@ -18,8 +18,89 @@ STALE_MINUTES = {
     "gym": 15,
     "office_hours": 15,
     "study": 30,
+    "lounge": 30,
     "laundry": 30,  # upper bound; see laundry_stale_minutes()
 }
+
+# ---------------------------------------------------------------------------
+# Busy levels
+# ---------------------------------------------------------------------------
+NOT_BUSY, MODERATE, BUSY = "not_busy", "moderate", "busy"
+LOW_RATE, HIGH_RATE = 0.40, 0.70          # occupancy thresholds
+LINE_LOW, LINE_HIGH = 3, 10               # dining line thresholds (people)
+MAX_REPORTS_PER_PLACE = 10
+
+
+def level_from_rate(rate: float) -> str:
+    if rate < LOW_RATE:
+        return NOT_BUSY
+    return MODERATE if rate <= HIGH_RATE else BUSY
+
+
+def level_from_line(people: float) -> str:
+    if people <= LINE_LOW:
+        return NOT_BUSY
+    return MODERATE if people <= LINE_HIGH else BUSY
+
+
+def _num(x):
+    return x if isinstance(x, (int, float)) and not isinstance(x, bool) and x >= 0 else None
+
+
+def _seats(data):
+    """(occupied, total) seats from one report, or None if the AI could not count."""
+    total, occ = _num(data.get("total_seats")), _num(data.get("occupied_seats"))
+    if total and occ is not None:
+        return min(occ, total), total
+    return None
+
+
+def _equipment(data):
+    eq = [e for e in data.get("equipment") or [] if isinstance(e, dict)]
+    if not eq:
+        return None
+    return sum(1 for e in eq if not e.get("free")), len(eq)
+
+
+def _laundry(data):
+    ms = [m for m in data.get("machines") or [] if isinstance(m, dict)]
+    if not ms:
+        return None
+    return sum(1 for m in ms if m.get("status") != "free"), len(ms)
+
+
+def summarize(category: str, reports: list) -> dict:
+    """Combine all fresh reports of one place into one rating.
+
+    Seats from several photos are ADDED before dividing, e.g.
+    photo 1: 8/10 seats taken, photo 2: 2/10  ->  (8+2)/(10+10) = 50% -> moderate.
+    """
+    if not reports:
+        return {}
+    datas = [r["data"] for r in reports]
+    out = {"n_reports": len(reports)}
+
+    if category == "dining":
+        lines = [_num(d.get("line_length")) for d in datas]
+        lines = [x for x in lines if x is not None]
+        if lines:
+            avg = sum(lines) / len(lines)
+            out.update(line_length=round(avg, 1), wait_minutes=round(avg * 40 / 60), level=level_from_line(avg))
+    if category == "laundry":
+        datas = datas[:1]  # machines change fast: only the newest photo counts
+    counter = {"gym": _equipment, "laundry": _laundry}.get(category, _seats)
+    pairs = [c for c in (counter(d) for d in datas) if c]
+    if pairs:
+        occ, tot = sum(p[0] for p in pairs), sum(p[1] for p in pairs)
+        out.update(occupied=occ, total=tot, occupancy=round(occ / tot, 2))
+        if "level" not in out:
+            out["level"] = level_from_rate(occ / tot)
+    if "level" not in out:  # AI could not count anything: use its overall impression (majority vote)
+        votes = [d.get("crowd") for d in datas if d.get("crowd") in (NOT_BUSY, MODERATE, BUSY)]
+        if votes:
+            out["level"] = max(set(votes), key=votes.count)
+    return out
+
 
 BOUNTY_FRESH = 1
 BOUNTY_STALE = 3

@@ -12,7 +12,7 @@ from typing import Optional
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -41,23 +41,51 @@ def _user_or_404(user_id: str):
 
 
 def _public_place(place, now=None):
-    """What everyone sees for free on the map: color + freshness + bounty, no details."""
+    """What everyone sees for free on the map: busy level, freshness and bounty."""
     now = now or time.time()
-    state = store.get_state(place["id"])
-    stale = C.is_stale(place, state, now)
+    fresh = store.fresh_reports(place["id"])
+    state = store.get_state(place["id"])  # newest report, may be stale
+    summary = C.summarize(place["category"], fresh)
     return {
         "id": place["id"],
         "name": place["name"],
         "category": place["category"],
+        "description": place["description"],
         "lat": place["lat"],
         "lng": place["lng"],
-        "availability": None if (stale or not state) else state["data"].get("availability"),
+        "level": summary.get("level"),          # not_busy | moderate | busy | None (stale / unknown)
+        "n_reports": len(fresh),
         "has_report": state is not None,
-        "fresh": not stale,
+        "fresh": bool(fresh),
         "minutes_old": None if not state else round(C.minutes_since(state["updated_at"], now)),
         "stale_after": round(C.stale_after_minutes(place["category"], state["data"] if state else None)),
         "bounty": C.bounty(place, state, store.demand.get(place["id"]), now),
     }
+
+
+def _report_view(place, report, now):
+    single = C.summarize(place["category"], [report])
+    d = report["data"]
+    return {
+        "id": report["id"],
+        "minutes_old": round(C.minutes_since(report["updated_at"], now)),
+        "summary": d.get("summary"),
+        "level": single.get("level"),
+        "occupied": single.get("occupied"),
+        "total": single.get("total"),
+        "line_length": d.get("line_length"),
+        "has_photo": report.get("photo") is not None,
+    }
+
+
+UNLOCK_MINUTES = 30
+
+
+def _can_see(user_id, place_id, report):
+    if report.get("user_id") == user_id:
+        return True
+    t = store.unlocks.get((user_id, place_id))
+    return t is not None and C.minutes_since(t) <= UNLOCK_MINUTES
 
 
 def _best_bounty():
@@ -121,20 +149,50 @@ def list_places():
 
 @app.get("/api/places/{place_id}")
 def place_detail(place_id: str, user_id: str):
-    """Costs 1 credit: full AI-extracted state of one place."""
+    """Costs 1 credit (free again for 30 min after paying): the AI summary of the whole area,
+    plus every fresh blurred photo it is based on."""
     place = store.places.get(place_id)
     if not place:
         raise HTTPException(404, "Unknown place")
     user = _user_or_404(user_id)
-    state = store.get_state(place_id)
-    if not state:
+    now = time.time()
+    fresh = store.fresh_reports(place_id)
+    if not fresh:
         store.mark_demand(place_id)  # someone wants it -> bounty goes up
-        return {**_public_place(place), "state": None, "charged": 0, "credits": user["credits"]}
-    if not store.spend(user_id, C.COST_DETAIL):
-        return _payment_required(user, C.COST_DETAIL)
-    if C.is_stale(place, state):
-        store.mark_demand(place_id)
-    return {**_public_place(place), "state": state["data"], "charged": C.COST_DETAIL, "credits": user["credits"]}
+        return {**_public_place(place, now), "summary": None, "reports": [], "charged": 0, "credits": user["credits"]}
+
+    charged = 0
+    already = store.unlocks.get((user_id, place_id))
+    if not (already and C.minutes_since(already, now) <= UNLOCK_MINUTES):
+        if not store.spend(user_id, C.COST_DETAIL):
+            return _payment_required(user, C.COST_DETAIL)
+        store.unlocks[(user_id, place_id)] = now
+        charged = C.COST_DETAIL
+
+    newest = fresh[0]["data"]
+    extras = {k: newest.get(k) for k in ("outlets_available", "whiteboard_free", "noise", "equipment", "machines")
+              if newest.get(k) is not None}
+    return {
+        **_public_place(place, now),
+        "summary": {**C.summarize(place["category"], fresh), **extras, "latest_summary": newest.get("summary")},
+        "reports": [_report_view(place, r, now) for r in fresh],
+        "charged": charged,
+        "credits": user["credits"],
+    }
+
+
+@app.get("/api/reports/{report_id}/photo")
+def report_photo(report_id: str, user_id: str):
+    """The blurred + annotated photo (faces blurred, people covered, empty seats outlined).
+    Visible to the uploader and to anyone who unlocked this place in the last 30 min."""
+    _user_or_404(user_id)
+    place_id, report = store.find_report(report_id)
+    if not report or report.get("photo") is None:
+        raise HTTPException(404, "This photo has expired.")
+    if not _can_see(user_id, place_id, report):
+        raise HTTPException(402, "Unlock this place (1 credit) to see its photos.")
+    return Response(content=report["photo"], media_type="image/jpeg",
+                    headers={"Cache-Control": "private, no-store"})
 
 
 # ---------------------------------------------------------------------------
@@ -186,20 +244,30 @@ async def upload(
         return _reject(user, str(e))
     del raw  # original photo is gone
 
-    # 4. AI: is it valid, and what is the state?
+    # 4. AI: is it valid, what is the state, where are people and empty seats?
     try:
         analysis = await asyncio.to_thread(vision.analyze_photo, clean, place)
     except Exception as e:  # network / model error
         del clean
         raise HTTPException(502, f"AI check failed: {e}")
-    del clean  # blurred photo is gone too. We keep only the JSON below.
 
     if not analysis.get("valid"):
+        del clean
         return _reject(user, f"Photo not accepted: {analysis.get('reject_reason') or 'not a clear photo of this place'}.",
                        analysis=analysis)
 
-    # 5. update the place and pay the bounty
-    store.set_state(place["id"], analysis)
+    # 5. second privacy layer: cover every person with a gray block, outline empty seats.
+    #    Only this annotated version is kept, and only until the place goes stale (max 30 min).
+    people, empty = analysis.pop("people", []), analysis.pop("empty_seats", [])
+    try:
+        shared_photo = await asyncio.to_thread(privacy.annotate, clean, people, empty)
+    except Exception:
+        shared_photo = None
+    del clean  # the blurred working copy is gone
+
+    # 6. update the place and pay the bounty
+    analysis["people_covered"] = len(people)
+    report = store.add_report(place["id"], analysis, shared_photo, user["id"])
     store.demand.pop(place["id"], None)
     earned = 0 if on_cooldown else reward
     if earned:
@@ -210,14 +278,20 @@ async def upload(
     else:
         msg = f"+{earned} credits for {place['name']}! Balance: {user['credits']}."
 
+    now = time.time()
     return {
         "accepted": True,
         "message": msg,  # the iPhone Shortcut shows this as a notification
         "place": place["name"],
+        "place_id": place["id"],
         "credits_earned": earned,
         "credits": user["credits"],
         "faces_blurred": faces,
-        "photo_stored": False,
+        "people_covered": len(people),
+        "photo_stored": False,  # the original is never stored
+        "report": _report_view(place, report, now),
+        "photo_url": f"/api/reports/{report['id']}/photo" if shared_photo else None,
+        "area": _public_place(place, now),
         "summary": analysis.get("summary"),
         "analysis": analysis,  # the full JSON the AI extracted (shown in the UI for testing)
         "mock": analysis.get("mock", False),
@@ -256,12 +330,18 @@ def ask(body: AskBody):
         walk = None
         if body.lat is not None and body.lng is not None:
             walk = C.walk_minutes(C.distance_m(body.lat, body.lng, p["lat"], p["lng"]))
+        fresh = store.fresh_reports(p["id"])
+        summary = C.summarize(p["category"], fresh)
+        newest = state["data"] if state else None
         candidates.append({
             "id": p["id"], "name": p["name"], "category": p["category"], "description": p["description"],
             "walk_minutes": walk,
-            "fresh": not C.is_stale(p, state, now),
+            "fresh": bool(fresh),
             "minutes_old": None if not state else round(C.minutes_since(state["updated_at"], now)),
-            "state": state["data"] if state else None,
+            "level": summary.get("level"),
+            "occupancy": summary.get("occupancy"),
+            "n_reports": len(fresh),
+            "state": None if not newest else {k: v for k, v in newest.items() if k not in ("model", "mock")},
         })
 
     try:
@@ -298,7 +378,11 @@ def status():
             "bounty": {"fresh": C.BOUNTY_FRESH, "stale": C.BOUNTY_STALE, "wanted": C.BOUNTY_WANTED},
             "stale_minutes": C.STALE_MINUTES, "gps_radius_m": C.GPS_RADIUS_M,
             "cooldown_min": C.UPLOAD_COOLDOWN_MIN,
+            "levels": {"not_busy": f"< {int(C.LOW_RATE*100)}% seats taken", "moderate": f"{int(C.LOW_RATE*100)}-{int(C.HIGH_RATE*100)}%",
+                       "busy": f"> {int(C.HIGH_RATE*100)}%", "dining_line": f"<= {C.LINE_LOW} / <= {C.LINE_HIGH} / more people"},
+            "photo_kept_minutes": "until the place goes stale (max 30)",
         },
+        "places": len(store.places),
     }
 
 

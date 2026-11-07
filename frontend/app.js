@@ -1,9 +1,11 @@
 // Scout frontend: plain JS, no build step.
 const API = "";  // same origin as the FastAPI server
 
-const CAT_ICON = { study: "📚", dining: "🍜", gym: "🏋️", laundry: "🧺", office_hours: "🙋" };
-const AVAIL_COLOR = { high: "#16a34a", medium: "#eab308", low: "#dc2626" };
-const AVAIL_LABEL = { high: "Easy to use", medium: "Busy", low: "Full" };
+const CAT_ICON = { study: "📚", dining: "🍜", lounge: "🛋️", gym: "🏋️", laundry: "🧺" };
+const CAT_LABEL = { study: "Study", dining: "Dining", lounge: "Dorm lounges", gym: "Gym", laundry: "Laundry" };
+const LEVEL_COLOR = { not_busy: "#16a34a", moderate: "#eab308", busy: "#dc2626" };
+const LEVEL_LABEL = { not_busy: "Not busy", moderate: "Moderate", busy: "Busy" };
+const CAMPUS = [40.4433, -79.9436];
 const EXAMPLES = [
   "Quiet spot with an outlet, near Tepper",
   "Where can 4 of us use a whiteboard?",
@@ -14,7 +16,8 @@ const EXAMPLES = [
 let user = null;
 let places = [];
 let map, markers = {};
-let myPos = null;
+let myPos = null, myDot = null;
+let activeCat = "all";
 
 // ---------- storage (wrapped: may be unavailable) ----------
 const store = {
@@ -141,30 +144,85 @@ function showTab(name) {
 
 // ---------- map ----------
 function initMap() {
-  map = L.map("map", { zoomControl: true }).setView([40.4433, -79.9436], 17);
+  map = L.map("map", { zoomControl: true }).setView(CAMPUS, 16);
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19, attribution: "&copy; OpenStreetMap contributors",
   }).addTo(map);
+
+  // two buttons bottom-right: 📍 my location, 🏫 back to campus
+  const Ctl = L.Control.extend({
+    options: { position: "bottomright" },
+    onAdd() {
+      const box = L.DomUtil.create("div", "leaflet-bar");
+      box.innerHTML = `<a href="#" id="btn-locate" title="My location" style="font-size:18px;width:40px;height:40px;line-height:40px">📍</a>
+                       <a href="#" id="btn-campus" title="Back to campus" style="font-size:18px;width:40px;height:40px;line-height:40px">🏫</a>`;
+      L.DomEvent.disableClickPropagation(box);
+      box.querySelector("#btn-locate").onclick = (e) => { e.preventDefault(); goToMe(); };
+      box.querySelector("#btn-campus").onclick = (e) => { e.preventDefault(); map.flyTo(CAMPUS, 16); };
+      return box;
+    },
+  });
+  map.addControl(new Ctl());
+}
+
+function showMe() {
+  if (!myPos || !map) return;
+  const ll = [myPos.lat, myPos.lng];
+  if (myDot) myDot.setLatLng(ll);
+  else myDot = L.circleMarker(ll, { radius: 8, color: "white", weight: 3, fillColor: "#2563eb", fillOpacity: 1 })
+    .addTo(map).bindTooltip("You are here");
+}
+
+function goToMe() {
+  if (myPos) { showMe(); map.flyTo([myPos.lat, myPos.lng], 18); return; }
+  if (!navigator.geolocation) return toast("Location is not available on this device", "bad");
+  toast("Finding you…");
+  navigator.geolocation.getCurrentPosition(
+    (pos) => { myPos = { lat: pos.coords.latitude, lng: pos.coords.longitude }; showMe(); map.flyTo([myPos.lat, myPos.lng], 18); },
+    () => toast("Allow location access in your browser to use this", "bad"),
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+}
+
+function renderFilters() {
+  const cats = ["all", "study", "dining", "lounge", "laundry", "gym"];
+  $("filters").innerHTML = cats.map((c) => {
+    const on = c === activeCat;
+    const label = c === "all" ? "All" : `${CAT_ICON[c]} ${CAT_LABEL[c]}`;
+    return `<button data-cat="${c}" class="flt rounded-full px-3 py-1 text-xs font-medium ${on ? "bg-stone-900 text-white" : "bg-white border border-stone-300"}">${label}</button>`;
+  }).join("");
+  document.querySelectorAll(".flt").forEach((b) => (b.onclick = () => { activeCat = b.dataset.cat; renderFilters(); applyFilter(); }));
+}
+
+function applyFilter() {
+  for (const p of places) {
+    const m = markers[p.id];
+    if (!m) continue;
+    const show = activeCat === "all" || p.category === activeCat;
+    if (show && !map.hasLayer(m)) m.addTo(map);
+    if (!show && map.hasLayer(m)) m.remove();
+  }
 }
 
 function pinHtml(p) {
-  const color = p.fresh && p.availability ? AVAIL_COLOR[p.availability] : "#d6d3d1";
+  const color = p.fresh && p.level ? LEVEL_COLOR[p.level] : "#d6d3d1";
   return `<div style="position:relative">
     <div class="pin" style="background:${color}">${CAT_ICON[p.category] || "📍"}</div>
     <div class="bounty">🪙${p.bounty}</div></div>`;
 }
 
 function popupHtml(p) {
-  const status = p.fresh && p.availability
-    ? `<span style="color:${AVAIL_COLOR[p.availability]};font-weight:700">${AVAIL_LABEL[p.availability]}</span>`
+  const status = p.fresh && p.level
+    ? `<span style="color:${LEVEL_COLOR[p.level]};font-weight:700">${LEVEL_LABEL[p.level]}</span>`
+      + ` <span style="color:#78716c">(${p.n_reports} photo${p.n_reports > 1 ? "s" : ""})</span>`
     : `<span style="color:#78716c">Unknown right now</span>`;
   return `<div style="min-width:200px">
     <div style="font-weight:700;font-size:14px">${esc(p.name)}</div>
     <div style="margin:2px 0">${status} · <span style="color:#78716c">${freshnessText(p)}</span></div>
     <div style="color:#78716c;font-size:12px">Snap it now for 🪙 ${p.bounty}</div>
     <div id="detail-${p.id}" style="margin-top:6px"></div>
-    <button onclick="unlock('${p.id}')" style="margin-top:6px;width:100%;background:#b91c1c;color:white;border-radius:8px;padding:6px;font-weight:600">
-      ${p.has_report ? "See details · 🪙1" : "Request a report (free)"}</button>
+    <button onclick="openPlace('${p.id}')" style="margin-top:6px;width:100%;background:#b91c1c;color:white;border-radius:8px;padding:6px;font-weight:600">
+      ${p.fresh ? "See details &amp; photos · 🪙1" : "Request a report (free)"}</button>
   </div>`;
 }
 
@@ -179,18 +237,81 @@ async function loadPlaces() {
       markers[p.id] = L.marker([p.lat, p.lng], { icon }).addTo(map).bindPopup(popupHtml(p));
     }
   }
+  applyFilter();
   const sel = $("snap-place");
   if (sel.options.length <= 1) {
-    places.forEach((p) => sel.add(new Option(`${CAT_ICON[p.category] || ""} ${p.name}`, p.id)));
+    for (const cat of Object.keys(CAT_LABEL)) {
+      const group = document.createElement("optgroup");
+      group.label = `${CAT_ICON[cat]} ${CAT_LABEL[cat]}`;
+      places.filter((p) => p.category === cat).forEach((p) => group.appendChild(new Option(p.name, p.id)));
+      if (group.children.length) sel.appendChild(group);
+    }
   }
 }
+
+function levelBadge(level, extra = "") {
+  if (!level) return `<span class="text-stone-500">Unknown</span>`;
+  return `<span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-sm font-semibold text-white" style="background:${LEVEL_COLOR[level]}">${LEVEL_LABEL[level]}${extra}</span>`;
+}
+
+function seatsText(o) {
+  if (o.total) return `${o.occupied}/${o.total} seats taken (${Math.round((o.occupied / o.total) * 100)}%)`;
+  if (o.line_length != null) return `${o.line_length} people in line`;
+  return "";
+}
+
+function photoSrc(reportId) {
+  return `/api/reports/${reportId}/photo?user_id=${encodeURIComponent(user.id)}`;
+}
+
+// Bottom sheet: AI summary of the whole area + every blurred photo it is based on.
+window.openPlace = async (placeId) => {
+  try {
+    const d = await api(`/api/places/${placeId}?user_id=${encodeURIComponent(user.id)}`);
+    setBalance(d.credits);
+    if (!d.summary) {
+      const box = $(`detail-${placeId}`);
+      if (box) box.innerHTML = `<div style="font-size:12px;color:#78716c">Request sent. The bounty for this place just went up.</div>`;
+      loadPlaces();
+      return;
+    }
+    const sm = d.summary;
+    const reports = d.reports.map((r) => `
+      <div class="rounded-xl border border-stone-200 overflow-hidden">
+        ${r.has_photo ? `<img src="${photoSrc(r.id)}" class="w-full" alt="blurred photo" loading="lazy" />` : ""}
+        <div class="p-2 text-xs flex flex-wrap items-center gap-2">
+          ${levelBadge(r.level)}<span>${esc(seatsText(r))}</span>
+          <span class="ml-auto text-stone-500">${r.minutes_old} min ago</span>
+        </div>
+        ${r.summary ? `<div class="px-2 pb-2 text-xs text-stone-600">${esc(r.summary)}</div>` : ""}
+      </div>`).join("");
+    $("sheet-body").innerHTML = `
+      <div class="flex items-start gap-2">
+        <span class="text-2xl">${CAT_ICON[d.category] || "📍"}</span>
+        <div><div class="font-bold text-lg leading-tight">${esc(d.name)}</div>
+        <div class="text-xs text-stone-500">${esc(d.description || "")}</div></div>
+      </div>
+      <div class="mt-3 rounded-xl bg-stone-50 p-3">
+        <div class="text-xs font-semibold text-stone-500 uppercase tracking-wide">AI summary of this area</div>
+        <div class="mt-1 flex flex-wrap items-center gap-2">${levelBadge(sm.level)}<span class="text-sm">${esc(seatsText(sm))}</span></div>
+        <div class="mt-1 text-xs text-stone-500">Based on ${sm.n_reports} photo${sm.n_reports > 1 ? "s" : ""} from the last ${d.stale_after} min${d.charged ? ` · charged 🪙${d.charged}` : " · already unlocked"}</div>
+        ${stateHtml(sm)}
+      </div>
+      <div class="mt-3 text-xs text-stone-500">Photos behind this summary. Faces are blurred, people are covered in gray, green boxes are free seats. Photos disappear when they go stale.</div>
+      <div class="mt-2 space-y-3">${reports}</div>`;
+    $("sheet").classList.remove("hidden");
+  } catch (e) {
+    toast(e.message, "bad");
+  }
+};
 
 function stateHtml(state) {
   if (!state) return "";
   const rows = [];
   const add = (k, v) => rows.push(`<div style="display:flex;justify-content:space-between;gap:8px"><span style="color:#78716c">${k}</span><b>${esc(v)}</b></div>`);
-  if (state.summary) rows.push(`<div style="margin-bottom:4px">${esc(state.summary)}</div>`);
-  if (state.free_seats != null) add("Free seats", state.free_seats);
+  const text = state.latest_summary || state.summary;
+  if (text) rows.push(`<div style="margin-bottom:4px">${esc(text)}</div>`);
+  if (state.total_seats != null) add("Seats taken", `${state.occupied_seats ?? "?"}/${state.total_seats}`);
   if (state.outlets_available != null) add("Outlet free", state.outlets_available ? "Yes" : "No");
   if (state.whiteboard_free != null) add("Whiteboard free", state.whiteboard_free ? "Yes" : "No");
   if (state.noise) add("Noise", state.noise);
@@ -204,22 +325,6 @@ function stateHtml(state) {
   });
   return `<div style="font-size:12px;border-top:1px solid #e7e5e4;padding-top:6px">${rows.join("")}</div>`;
 }
-
-window.unlock = async (placeId) => {
-  try {
-    const d = await api(`/api/places/${placeId}?user_id=${encodeURIComponent(user.id)}`);
-    setBalance(d.credits);
-    const box = $(`detail-${placeId}`);
-    if (!d.state) {
-      if (box) box.innerHTML = `<div style="font-size:12px;color:#78716c">Request sent. The bounty for this place just went up.</div>`;
-      loadPlaces();
-      return;
-    }
-    if (box) box.innerHTML = stateHtml(d.state);
-  } catch (e) {
-    toast(e.message, "bad");
-  }
-};
 
 // ---------- ask ----------
 function renderExamples() {
@@ -240,7 +345,7 @@ async function ask() {
     const d = await api("/api/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     setBalance(d.credits);
     const cards = d.recommendations.map((r, i) => {
-      const color = r.fresh && r.availability ? AVAIL_COLOR[r.availability] : "#a8a29e";
+      const color = r.fresh && r.level ? LEVEL_COLOR[r.level] : "#a8a29e";
       return `<div class="fade-in rounded-2xl bg-white border border-stone-200 p-4 flex gap-3">
         <div class="text-2xl font-bold text-stone-300 w-6">${i + 1}</div>
         <div class="flex-1">
@@ -310,13 +415,16 @@ async function upload() {
   try {
     const d = await api("/api/upload", { method: "POST", body: fd });
     s.forEach((el) => (el.firstChild.textContent = "✅"));
-    step(d.accepted ? "Photo deleted. Only the result is kept." : "Photo deleted.", true);
+    step(d.accepted ? "Original deleted. Only the blurred, covered version is kept (until it goes stale)." : "Photo deleted.", true);
     setBalance(d.credits);
     $("snap-result").innerHTML = `<div class="fade-in rounded-xl p-3 ${d.accepted ? "bg-green-50 text-green-900" : "bg-red-50 text-red-900"}">
       <div class="font-semibold">${esc(d.message)}</div>
       ${d.summary ? `<div class="text-sm mt-1">AI saw: ${esc(d.summary)}</div>` : ""}
-      ${d.faces_blurred ? `<div class="text-xs mt-1">${d.faces_blurred} face(s) blurred before analysis.</div>` : ""}
       ${d.mock ? `<div class="text-xs mt-1 opacity-70">Mock AI mode (no OPENROUTER_KEY).</div>` : ""}
+      ${d.accepted && d.report ? `<div class="mt-2 flex flex-wrap items-center gap-2 text-sm"><span>This photo:</span>${levelBadge(d.report.level)}<span>${esc(seatsText(d.report))}</span></div>` : ""}
+      ${d.accepted && d.area ? `<div class="mt-1 flex flex-wrap items-center gap-2 text-sm"><span>Whole area now:</span>${levelBadge(d.area.level)}<span class="text-xs opacity-70">from ${d.area.n_reports} photo${d.area.n_reports > 1 ? "s" : ""}</span></div>` : ""}
+      ${d.photo_url ? `<img src="${d.photo_url}?user_id=${encodeURIComponent(user.id)}" class="mt-2 w-full rounded-lg" alt="what other students will see" />
+        <div class="text-xs mt-1 opacity-70">What other students see: ${d.faces_blurred} face(s) blurred, ${d.people_covered} person(s) covered, green = free seat.</div>` : ""}
       ${d.accepted && d.analysis ? `<div class="mt-2 bg-white/70 rounded-lg p-2">${stateHtml(d.analysis)}</div>` : ""}
       ${d.analysis ? `<details class="mt-2 text-xs"><summary class="cursor-pointer opacity-70">Raw AI output (for testing)</summary>
         <pre class="mt-1 whitespace-pre-wrap break-all bg-white/70 rounded p-2">${esc(JSON.stringify(d.analysis, null, 2))}</pre></details>` : ""}
@@ -362,8 +470,13 @@ async function loadStatus() {
 function locate() {
   if (!navigator.geolocation) return;
   navigator.geolocation.getCurrentPosition(
-    (pos) => { myPos = { lat: pos.coords.latitude, lng: pos.coords.longitude }; },
+    (pos) => { myPos = { lat: pos.coords.latitude, lng: pos.coords.longitude }; showMe(); },
     () => {}, { enableHighAccuracy: true, timeout: 8000 }
+  );
+  // keep the blue dot following the user
+  navigator.geolocation.watchPosition(
+    (pos) => { myPos = { lat: pos.coords.latitude, lng: pos.coords.longitude }; showMe(); },
+    () => {}, { enableHighAccuracy: true, maximumAge: 15000 }
   );
 }
 
@@ -371,11 +484,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.querySelectorAll(".tab").forEach((b) => (b.onclick = () => showTab(b.dataset.tab)));
   $("account-btn").onclick = openAccount;
   $("modal-close").onclick = () => $("modal").classList.add("hidden");
+  $("sheet-close").onclick = () => $("sheet").classList.add("hidden");
   $("ask-btn").onclick = ask;
   $("snap-file").onchange = onFile;
   $("snap-btn").onclick = upload;
   renderExamples();
   initMap();
+  renderFilters();
   showTab("map");
   locate();
   loadStatus();

@@ -1,50 +1,314 @@
 [
   {
-    "id": "hunt",
-    "name": "Hunt Library",
+    "id": "cohon-marketplace",
+    "name": "Cohon Center Marketplace (2F)",
+    "category": "dining",
+    "lat": 40.44336,
+    "lng": -79.94212,
+    "description": "Au Bon Pain, Ciao Bella, Crisp and Crust, Revolution Noodle, True Burger, Nourish."
+  },
+  {
+    "id": "schatz",
+    "name": "Schatz Dining Room",
+    "category": "dining",
+    "lat": 40.44318,
+    "lng": -79.94232,
+    "description": "All-you-care-to-eat dining hall, Cohon Center 2F."
+  },
+  {
+    "id": "entropy",
+    "name": "Entropy+ & El Gallo de Oro",
+    "category": "dining",
+    "lat": 40.4433,
+    "lng": -79.9419,
+    "description": "Convenience store and Mexican food, Cohon Center ground floor."
+  },
+  {
+    "id": "rohr-commons",
+    "name": "Rohr Commons (Tepper)",
+    "category": "dining",
+    "lat": 40.44478,
+    "lng": -79.94548,
+    "description": "Build Pizza, Capital Grains, Forbes Ave Subs, Millie's, Tepper Taqueria, E.A.T."
+  },
+  {
+    "id": "exchange",
+    "name": "The Exchange",
+    "category": "dining",
+    "lat": 40.44128,
+    "lng": -79.9418,
+    "description": "Posner Hall 1F."
+  },
+  {
+    "id": "resnik-food",
+    "name": "Resnik Food Hall",
+    "category": "dining",
+    "lat": 40.44222,
+    "lng": -79.93985,
+    "description": "The Edge Cafe & Market, Tahini, Taste of India, Urban Revolution."
+  },
+  {
+    "id": "stackd",
+    "name": "Stack'd Underground",
+    "category": "dining",
+    "lat": 40.44575,
+    "lng": -79.943,
+    "description": "Stack'd and Stack'd Dessert Bar, Morewood Gardens lower level."
+  },
+  {
+    "id": "redhawk",
+    "name": "Redhawk Coffee",
+    "category": "dining",
+    "lat": 40.44283,
+    "lng": -79.9464,
+    "description": "Scaife Hall 1F."
+  },
+  {
+    "id": "rohr-cafe-gates",
+    "name": "Rohr Cafe (Gates)",
+    "category": "dining",
+    "lat": 40.44355,
+    "lng": -79.94462,
+    "description": "La Prima, Gates Hillman Center 3F."
+  },
+  {
+    "id": "la-prima-wean",
+    "name": "La Prima Espresso (Wean)",
+    "category": "dining",
+    "lat": 40.44265,
+    "lng": -79.9457,
+    "description": "Wean Hall 5F."
+  },
+  {
+    "id": "maggie-murph",
+    "name": "Maggie Murph Cafe",
+    "category": "dining",
+    "lat": 40.44102,
+    "lng": -79.94355,
+    "description": "De Fer Coffee & Tea, Hunt Library 1F."
+  },
+  {
+    "id": "hunan-express",
+    "name": "Hunan Express",
+    "category": "dining",
+    "lat": 40.4434,
+    "lng": -79.94545,
+    "description": "Newell-Simon Atrium."
+  },
+  {
+    "id": "wild-blue",
+    "name": "Wild Blue Sushi",
+    "category": "dining",
+    "lat": 40.44305,
+    "lng": -79.9472,
+    "description": "Ruge Atrium, Scott Hall lower level."
+  },
+  {
+    "id": "zebra-lounge",
+    "name": "Zebra Lounge",
+    "category": "dining",
+    "lat": 40.44165,
+    "lng": -79.94285,
+    "description": "College of Fine Arts 1F."
+  },
+  {
+    "id": "stephanies",
+    "name": "Stephanie's Market C",
+    "category": "dining",
+    "lat": 40.4466,
+    "lng": -79.951,
+    "description": "Mellon Institute 4F, Room 401."
+  },
+  {
+    "id": "food-truck",
+    "name": "Tartan Food Truck",
+    "category": "dining",
+    "lat": 40.444,
+    "lng": -79.9427,
+    "description": "Mr. Bulgogi, Legacy Plaza."
+  },
+  {
+    "id": "hunt-1f",
+    "name": "Hunt Library 1F",
     "category": "study",
-    "lat": 40.44108,
-    "lng": -79.94374,
-    "description": "Main library. Quiet floors, group tables, outlets along the walls."
+    "lat": 40.44112,
+    "lng": -79.94392,
+    "description": "Busy floor near the cafe, group tables."
+  },
+  {
+    "id": "hunt-2f",
+    "name": "Hunt Library 2F",
+    "category": "study",
+    "lat": 40.44104,
+    "lng": -79.94378,
+    "description": "Open tables and carrels."
+  },
+  {
+    "id": "hunt-3f",
+    "name": "Hunt Library 3F",
+    "category": "study",
+    "lat": 40.44096,
+    "lng": -79.94364,
+    "description": "Quiet floor."
+  },
+  {
+    "id": "hunt-4f",
+    "name": "Hunt Library 4F",
+    "category": "study",
+    "lat": 40.44088,
+    "lng": -79.9435,
+    "description": "Quiet floor, outlets along the walls."
+  },
+  {
+    "id": "sorrells",
+    "name": "Sorrells Library",
+    "category": "study",
+    "lat": 40.44275,
+    "lng": -79.94585,
+    "description": "Engineering and science library, Wean Hall 4F."
+  },
+  {
+    "id": "mi-library",
+    "name": "Mellon Institute Library",
+    "category": "study",
+    "lat": 40.4467,
+    "lng": -79.9508,
+    "description": "Quiet reading room in Mellon Institute."
   },
   {
     "id": "gates",
     "name": "Gates Hillman Center",
     "category": "study",
     "lat": 40.44348,
-    "lng": -79.94457,
-    "description": "CS building. Open study areas, whiteboards, busy near OH."
+    "lng": -79.9444,
+    "description": "Open study areas and whiteboards, CS building."
   },
   {
-    "id": "entropy",
-    "name": "Entropy+",
-    "category": "dining",
-    "lat": 40.44330,
-    "lng": -79.94196,
-    "description": "Convenience store in the Cohon Center. Checkout line gets long at noon."
+    "id": "cohon-study",
+    "name": "Cohon Center Study Areas",
+    "category": "study",
+    "lat": 40.44345,
+    "lng": -79.94175,
+    "description": "Tables and lounges around the University Center."
   },
   {
-    "id": "tepper",
-    "name": "Tepper Quad Cafe",
-    "category": "dining",
-    "lat": 40.44475,
-    "lng": -79.94558,
-    "description": "Food stations and seating in the Tepper Quad."
+    "id": "tepper-study",
+    "name": "Tepper Quad Study Spaces",
+    "category": "study",
+    "lat": 40.4446,
+    "lng": -79.94575,
+    "description": "Open seating and group rooms in the Tepper Building."
+  },
+  {
+    "id": "scaife-study",
+    "name": "Scaife Hall",
+    "category": "study",
+    "lat": 40.44295,
+    "lng": -79.94655,
+    "description": "Study seating in the new engineering building."
+  },
+  {
+    "id": "highmark-study",
+    "name": "Highmark Center",
+    "category": "study",
+    "lat": 40.44395,
+    "lng": -79.9409,
+    "description": "Seating near Shake Smart in the Highmark Center."
+  },
+  {
+    "id": "morewood-lounge",
+    "name": "Morewood Gardens Lounge",
+    "category": "lounge",
+    "lat": 40.44595,
+    "lng": -79.94275,
+    "description": "Common area for Morewood residents."
+  },
+  {
+    "id": "etower-lounge",
+    "name": "Morewood E-Tower Lounge",
+    "category": "lounge",
+    "lat": 40.4456,
+    "lng": -79.94245,
+    "description": "Common area in E-Tower."
+  },
+  {
+    "id": "stever-lounge",
+    "name": "Stever House Lounge",
+    "category": "lounge",
+    "lat": 40.44485,
+    "lng": -79.9415,
+    "description": "First-year traditional hall common room."
+  },
+  {
+    "id": "mudge-lounge",
+    "name": "Mudge House Lounge",
+    "category": "lounge",
+    "lat": 40.4457,
+    "lng": -79.9408,
+    "description": "Common room in Mudge House."
+  },
+  {
+    "id": "donner-lounge",
+    "name": "Donner House Lounge",
+    "category": "lounge",
+    "lat": 40.44095,
+    "lng": -79.94005,
+    "description": "Common room in Donner House (Big Blue)."
+  },
+  {
+    "id": "hamerschlag-lounge",
+    "name": "Hamerschlag House Lounge",
+    "category": "lounge",
+    "lat": 40.4417,
+    "lng": -79.941,
+    "description": "Common room in Hamerschlag House."
+  },
+  {
+    "id": "resnik-lounge",
+    "name": "Resnik House Lounge",
+    "category": "lounge",
+    "lat": 40.44205,
+    "lng": -79.9396,
+    "description": "Common room in Resnik House."
+  },
+  {
+    "id": "mm-lounge",
+    "name": "Boss & McGill Lounge",
+    "category": "lounge",
+    "lat": 40.4419,
+    "lng": -79.9393,
+    "description": "Margaret Morrison neighborhood common room."
+  },
+  {
+    "id": "fifth-clyde-lounge",
+    "name": "Fifth Clyde House Lounge",
+    "category": "lounge",
+    "lat": 40.4476,
+    "lng": -79.9434,
+    "description": "Common areas in Fifth Clyde House."
+  },
+  {
+    "id": "rof-lounge",
+    "name": "Residence on Fifth Lounge",
+    "category": "lounge",
+    "lat": 40.448,
+    "lng": -79.9478,
+    "description": "Common room in Residence on Fifth."
   },
   {
     "id": "cuc-gym",
     "name": "CUC Fitness Center",
     "category": "gym",
     "lat": 40.44352,
-    "lng": -79.94175,
+    "lng": -79.9416,
     "description": "Cardio machines, racks and free weights in the Cohon Center."
   },
   {
     "id": "morewood-laundry",
     "name": "Morewood Laundry Room",
     "category": "laundry",
-    "lat": 40.44590,
-    "lng": -79.94290,
+    "lat": 40.4461,
+    "lng": -79.943,
     "description": "Front-load washers and dryers for Morewood residents."
   }
 ]

@@ -35,17 +35,24 @@ def mock_mode() -> bool:
 
 
 # ---------- schemas the vision model must fill, per place category ----------
+SEATS_FIELDS = {
+    "total_seats": "integer, ALL seats you can see (chairs, stools, sofa spots), taken or empty",
+    "occupied_seats": "integer, seats with a person OR clearly reserved by belongings (bag, laptop, coat)",
+}
 CATEGORY_FIELDS = {
     "study": {
-        "free_seats": "integer, empty seats you can see",
+        **SEATS_FIELDS,
         "outlets_available": "boolean, a free power outlet is visible near an empty seat",
         "whiteboard_free": "boolean or null if no whiteboard is visible",
         "noise": "one of quiet | moderate | loud (judge from how many people are talking or grouped)",
     },
+    "lounge": {
+        **SEATS_FIELDS,
+        "noise": "one of quiet | moderate | loud",
+    },
     "dining": {
-        "line_length": "integer, people waiting in line",
-        "wait_minutes": "integer, rough estimate assuming ~40 seconds per person",
-        "seating_available": "boolean",
+        "line_length": "integer, people waiting in line (0 if no line)",
+        **SEATS_FIELDS,
     },
     "gym": {
         "equipment": "list of {name: string, free: boolean} for each machine/rack you can see",
@@ -55,10 +62,6 @@ CATEGORY_FIELDS = {
                     "status: free | running | done_clothes_inside, minutes_left: integer or null}. "
                     "Read the time on each display if visible. A stopped machine with clothes visible "
                     "through the glass door is done_clothes_inside.",
-    },
-    "office_hours": {
-        "queue_length": "integer, students waiting",
-        "tas_visible": "integer",
     },
 }
 
@@ -129,13 +132,20 @@ type is dining).
 
 Step 2. If valid, describe the current state using ONLY what you can see.
 
+Step 3. Give bounding boxes as [ymin, xmin, ymax, xmax] on a 0-1000 scale
+(0,0 = top-left of the image, 1000,1000 = bottom-right):
+- "people": one box per visible person, covering the WHOLE body (head to feet).
+- "empty_seats": one box per empty, unreserved seat.
+
 Reply with ONE JSON object and nothing else:
 {{
   "valid": boolean,
   "reject_reason": string or null,
-  "availability": "high" | "medium" | "low",   // how easy it is to use this place right now
-  "summary": string,                           // max 15 words, for students, no people descriptions
+  "crowd": "not_busy" | "moderate" | "busy",   // your overall impression of this photo
+  "summary": string,                          // max 15 words, for students, no people descriptions
 {field_lines}
+  "people": [[ymin, xmin, ymax, xmax], ...],
+  "empty_seats": [[ymin, xmin, ymax, xmax], ...]
 }}
 Never describe what any person looks like."""
 
@@ -150,23 +160,40 @@ Never describe what any person looks like."""
     result, used = _post_json(VISION_MODEL, messages)
     result["model"] = used
     result["valid"] = _as_bool(result.get("valid"))
-    if result.get("availability") not in ("high", "medium", "low"):
-        result["availability"] = "medium"
+    if result.get("crowd") not in ("not_busy", "moderate", "busy"):
+        result["crowd"] = None
+    for k in ("people", "empty_seats"):
+        if not isinstance(result.get(k), list):
+            result[k] = []
     return result
+
+
+def _mock_boxes(n_people: int, n_empty: int):
+    """Fake boxes laid out in a grid so the annotated photo can be tested without a key."""
+    boxes, i = [], 0
+    for _ in range(n_people + n_empty):
+        r, c = divmod(i, 5)
+        boxes.append([300 + r * 220, 60 + c * 190, 480 + r * 220, 220 + c * 190])
+        i += 1
+    return boxes[:n_people], boxes[n_people:]
 
 
 def _mock_analysis(place: Dict[str, Any]) -> Dict[str, Any]:
     cat = place["category"]
-    avail = random.choice(["high", "medium", "low"])
-    base = {"valid": True, "reject_reason": None, "availability": avail, "mock": True}
-    if cat == "study":
-        base.update(free_seats=random.randint(0, 20), outlets_available=random.random() > 0.4,
-                    whiteboard_free=random.random() > 0.5, noise=random.choice(["quiet", "moderate", "loud"]),
-                    summary="Several open tables, a few near outlets.")
+    base = {"valid": True, "reject_reason": None, "crowd": random.choice(["not_busy", "moderate", "busy"]),
+            "mock": True, "people": [], "empty_seats": []}
+    if cat in ("study", "lounge", "dining"):
+        total = random.randint(6, 10)
+        occ = random.randint(0, total)
+        base.update(total_seats=total, occupied_seats=occ)
+        base["people"], base["empty_seats"] = _mock_boxes(occ, total - occ)
+    if cat in ("study", "lounge"):
+        base.update(outlets_available=random.random() > 0.4, whiteboard_free=random.random() > 0.5,
+                    noise=random.choice(["quiet", "moderate", "loud"]),
+                    summary=f"{base['total_seats'] - base['occupied_seats']} of {base['total_seats']} seats free.")
     elif cat == "dining":
         n = random.randint(0, 15)
-        base.update(line_length=n, wait_minutes=round(n * 40 / 60), seating_available=True,
-                    summary=f"About {n} people in line.")
+        base.update(line_length=n, summary=f"About {n} people in line.")
     elif cat == "gym":
         base.update(equipment=[{"name": "squat rack", "free": random.random() > 0.5},
                                {"name": "treadmill", "free": True}],
@@ -191,8 +218,9 @@ def ask_scout(query: str, candidates: List[Dict[str, Any]]) -> Dict[str, Any]:
     prompt = f"""You are Scout, a campus space finder at Carnegie Mellon.
 A student asks: "{query}"
 
-Live data for each place (state is null if nobody has reported it yet; fresh=false means the
-report is old and may be wrong):
+Live data for each place. "level" is not_busy / moderate / busy, computed from all fresh photos
+("n_reports" photos, "occupancy" = share of seats taken). state is null if nobody has reported it yet;
+fresh=false means the report is old and may be wrong:
 {json.dumps(candidates, indent=1)}
 
 Pick up to 3 places that best fit the request. Prefer fresh data that clearly matches.
@@ -214,14 +242,15 @@ def _mock_ask(query: str, candidates: List[Dict[str, Any]]) -> Dict[str, Any]:
     q = query.lower()
     wants = {
         "study": any(w in q for w in ["study", "quiet", "outlet", "whiteboard", "seat", "work", "学习", "自习"]),
+        "lounge": any(w in q for w in ["lounge", "dorm", "hang", "chill", "宿舍"]),
         "dining": any(w in q for w in ["eat", "food", "lunch", "dinner", "hungry", "饭", "吃"]),
         "gym": any(w in q for w in ["gym", "workout", "squat", "run", "健身"]),
         "laundry": any(w in q for w in ["laundry", "wash", "dryer", "洗衣"]),
     }
-    score = {"high": 3, "medium": 2, "low": 1}
+    score = {"not_busy": 3, "moderate": 2, "busy": 1}
 
     def rank(c):
-        s = score.get((c.get("state") or {}).get("availability"), 0)
+        s = score.get(c.get("level"), 0)
         s += 2 if c.get("fresh") else 0
         s += 3 if wants.get(c["category"]) else 0
         s -= (c.get("walk_minutes") or 0) / 10

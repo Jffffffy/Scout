@@ -27,8 +27,12 @@ class Store:
         self.lock = threading.Lock()
         with open(PLACES_FILE) as f:
             self.places: Dict[str, Dict[str, Any]] = {p["id"]: p for p in json.load(f)}
-        # place_id -> {"data": {...}, "updated_at": ts}
-        self.states: Dict[str, Dict[str, Any]] = {}
+        # place_id -> newest-first list of reports:
+        # {"id", "data", "updated_at", "user_id", "photo": blurred+annotated JPEG bytes or None}
+        # Photos are dropped as soon as the report goes stale (max 30 min).
+        self.reports: Dict[str, List[Dict[str, Any]]] = {}
+        # (user_id, place_id) -> time the user paid to see this place's details + photos
+        self.unlocks: Dict[tuple, float] = {}
         # user_id -> {"id", "name", "credits", "uploads", "created_at", "_salt", "_pw"}
         # The id is a secret random token. Passwords are stored only as salted PBKDF2 hashes.
         self.users: Dict[str, Dict[str, Any]] = {}
@@ -99,13 +103,50 @@ class Store:
         users = sorted(self.users.values(), key=lambda u: u["uploads"], reverse=True)
         return [{"name": u["name"], "uploads": u["uploads"]} for u in users[:limit] if u["uploads"] > 0]
 
-    # ---------- places ----------
-    def set_state(self, place_id: str, data: Dict[str, Any]) -> None:
+    # ---------- places / reports ----------
+    def add_report(self, place_id: str, data: Dict[str, Any], photo: Optional[bytes], user_id: str) -> Dict[str, Any]:
+        report = {"id": secrets.token_urlsafe(8), "data": data, "updated_at": time.time(),
+                  "user_id": user_id, "photo": photo}
         with self.lock:
-            self.states[place_id] = {"data": data, "updated_at": time.time()}
+            self.reports.setdefault(place_id, []).insert(0, report)
+        self.prune(place_id)
+        return report
+
+    def prune(self, place_id: str) -> None:
+        """Forget stale reports and their photos. Keep the newest report's data (no photo)
+        so the map can still say 'stale, last seen X min ago'."""
+        from .credits import is_stale, MAX_REPORTS_PER_PLACE  # local import avoids a cycle
+        place = self.places[place_id]
+        now = time.time()
+        with self.lock:
+            reps = self.reports.get(place_id, [])[:MAX_REPORTS_PER_PLACE]
+            fresh = [r for r in reps if not is_stale(place, r, now)]
+            if not fresh and reps:
+                newest = dict(reps[0])
+                newest["photo"] = None
+                fresh = [newest]
+            for r in reps:
+                if r not in fresh:
+                    r["photo"] = None  # drop image bytes right away
+            self.reports[place_id] = fresh
+
+    def fresh_reports(self, place_id: str) -> List[Dict[str, Any]]:
+        from .credits import is_stale
+        self.prune(place_id)
+        place = self.places[place_id]
+        return [r for r in self.reports.get(place_id, []) if not is_stale(place, r)]
 
     def get_state(self, place_id: str) -> Optional[Dict[str, Any]]:
-        return self.states.get(place_id)
+        """Newest report (fresh or stale), or None if the place was never reported."""
+        reps = self.reports.get(place_id)
+        return reps[0] if reps else None
+
+    def find_report(self, report_id: str):
+        for place_id, reps in self.reports.items():
+            for r in reps:
+                if r["id"] == report_id:
+                    return place_id, r
+        return None, None
 
     def mark_demand(self, place_id: str) -> None:
         self.demand[place_id] = time.time()

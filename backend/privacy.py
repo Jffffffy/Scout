@@ -95,3 +95,52 @@ def blur_faces(image_bytes: bytes) -> Tuple[bytes, int]:
     if not ok:
         raise PrivacyError("Could not process this image.")
     return buf.tobytes(), len(boxes)
+
+
+# ---------------------------------------------------------------------------
+# Annotated photo for other students: people hidden, empty seats highlighted
+# ---------------------------------------------------------------------------
+def _to_px(box, w, h, pad=0.0):
+    """AI boxes are [ymin, xmin, ymax, xmax] on a 0-1000 scale. Return clamped pixel box or None."""
+    try:
+        y0, x0, y1, x1 = [float(v) for v in box][:4]
+    except (TypeError, ValueError):
+        return None
+    if not (0 <= y0 < y1 <= 1000 and 0 <= x0 < x1 <= 1000):
+        return None
+    bw, bh = (x1 - x0) * pad, (y1 - y0) * pad
+    x0, x1 = max(0, x0 - bw), min(1000, x1 + bw)
+    y0, y1 = max(0, y0 - bh), min(1000, y1 + bh)
+    return int(x0 * w / 1000), int(y0 * h / 1000), int(x1 * w / 1000), int(y1 * h / 1000)
+
+
+def _label(img, text, x, y, color):
+    font, scale, th = cv2.FONT_HERSHEY_SIMPLEX, max(0.45, img.shape[1] / 1600), 1
+    (tw, tht), _ = cv2.getTextSize(text, font, scale, th)
+    y = max(tht + 6, y)
+    cv2.rectangle(img, (x, y - tht - 6), (x + tw + 6, y), color, -1)
+    cv2.putText(img, text, (x + 3, y - 4), font, scale, (255, 255, 255), th, cv2.LINE_AA)
+
+
+def annotate(clean_jpeg: bytes, people_boxes, empty_seat_boxes) -> bytes:
+    """Draw on the ALREADY face-blurred photo:
+    - every person covered by a solid gray block (second privacy layer, whole body)
+    - every empty seat outlined in green
+    Returns JPEG bytes that are safe to show to other students."""
+    img = _decode(clean_jpeg)
+    h, w = img.shape[:2]
+    thick = max(2, w // 300)
+    for box in (empty_seat_boxes or [])[:60]:
+        px = _to_px(box, w, h)
+        if px:
+            cv2.rectangle(img, px[:2], px[2:], (60, 180, 75), thick)
+            _label(img, "free", px[0], px[1], (60, 160, 60))
+    for box in (people_boxes or [])[:60]:
+        px = _to_px(box, w, h, pad=0.08)
+        if px:
+            cv2.rectangle(img, px[:2], px[2:], (110, 110, 110), -1)
+            _label(img, "person", px[0], px[1] + 4 + int(h / 60), (80, 80, 80))
+    ok, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 80])
+    if not ok:
+        raise PrivacyError("Could not process this image.")
+    return buf.tobytes()
